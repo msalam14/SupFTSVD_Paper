@@ -1,0 +1,1387 @@
+---
+title: "Parallel Estimation of SupFTSVD"
+format: pdf
+editor: source
+bibliography: /Users/samsul/Academic/PhDStudy/SummerIntern/DUKE_CFAR/DukeCFAR2022/dcfar.bib
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+```{r packg,echo=FALSE, warning=FALSE,message=FALSE,comment=FALSE,echo=FALSE}
+library(tidyverse)
+library(dplyr)
+library(gridExtra)
+library(ggplot2)
+library(factoextra)
+library(glmnet)
+library(rsvd)
+library(ggpubr)
+library(matrixcalc)
+source(paste(getwd(),'/ftsvd-main/FTSVD.R',sep = ""))
+```
+
+# Simulation results at different scenarios
+
+We considered $4$ scenarios, descriptions of them are listed below
+
+-   Scenario I: $n=20$, $p=500$, and $r=1$
+
+-   Scenario II: $n=100$, $p=500$, and $r=1$
+
+-   Scenario III: $n=20$, $p=500$, and $r=2$
+
+-   Scenario IV: $n=100$, $p=500$, and $r=2$
+
+Each of these $4$ scenarios are evaluated for $\bar{m}\in\{3,5,8\}$ and at three levels of $\sigma^2_k\in\{0,2,5\}$ when $r=1$, $\sigma^2_k\in\{(0,0),(2,3),(5,7)\}$ when $r=2$ and $\sigma^2_\epsilon\in\{1,5\}$ .
+
+```{r}
+#sequential results are in September 27
+#dirP<-"/Users/samsul/Academic/PhDStudy/PHD_RESEARCH/PHD@SupFTSVD/SupFTSVD/SSResults/Sep27_2023/"
+dirP<-"/Users/samsul/Academic/PhDStudy/PHD_RESEARCH/PHD@SupFTSVD/SupFTSVD_All/SSResults/Feb25_2024/SupFTSVD/"
+fname<-list.files(dirP)
+mbar<-c(3,5,8)
+```
+
+-   Each of the six files contains either scenarios $I \& II$ or $III \& IV$. Three files show results for scenarios $I \& II$ with average grid density ($\bar{m}$) $5, 8$ and $10$.
+
+    -   *SupFTSVD3_DSCN1_3.csv*: scenarios I and II with $\bar{m}=5$
+    -   *SupFTSVD6_DSCN1_3.csv*: scenarios I and II with $\bar{m}=8$
+    -   *SupFTSVD8_DSCN1_3.csv*: scenarios I and II with $\bar{m}=10$
+    -   *SupFTSVD5_DSCN2_4.csv*: scenarios III and IV with $\bar{m}=5$
+    -   *SupFTSVD8_DSCN2_4.csv*: scenarios III and IV with $\bar{m}=8$
+    -   *SupFTSVD10_DSCN2_4.csv*: scenarios III and IV with $\bar{m}=10$
+
+-   A description on columns of these files is available below:
+
+    -   *FTSVD1MP*: estimate of $\mathbf{v}_i^T\hat{\boldsymbol{\gamma}}$ via FTSVD followed a linear regression
+
+    -   *SupFTSVD1M*: estimate of $\mathbf{v}_i^T\hat{\boldsymbol{\gamma}}$ via FTSVD followed a linear regression
+
+    -   *bFTSVD1*: estimate of feature loading via FTSVD
+
+    -   *bSupFTSVD1*: estimate of feature loading via Supervised FTSVD
+
+    -   *xiFTSVD1*: estimate of singular function via FTSVD
+
+    -   *xiSupFTSVD1*: estimate of singular function via Supervised FTSVD
+
+    -   *Cov2R*: coefficient of determination where $a_i$s are regressed on $\mathbf{v}_i$ in case of FTSVD (separate)
+
+    -   *SupCov2R* coefficient of determination where $a_i$s are regressed on $\mathbf{v}_i$ in case of SupFTSVD (simulataneous)
+
+    -   *Sig2E*: true of value of $\sigma^2_k$
+
+    -   *Grid*: $\bar{m}$
+
+    -   *n*: number of subjects
+
+    -   *Tau*: tensor error variance ($\sigma^2$)
+
+    -   *nFeat*: feature dimension $p$
+
+    -   *comp*: $r=1,2$
+    
+# Sample size
+## Combined results: supervision +unsupervision
+```{r}
+Res2g3<-read.csv(paste(dirP,fname[5],sep = ""))
+Res3g3<-read.csv(paste(dirP,fname[6],sep = ""))
+Res2g3us<-read.csv(paste(dirP,fname[11],sep = ""))
+Res3g3us<-read.csv(paste(dirP,fname[12],sep = ""))
+```
+
+```{r}
+Res2_dat<-Res2g3 %>%
+  mutate(SNR=ifelse(Sig2E==1,"paste(SNR[1])",ifelse(Sig2E==2,"paste(SNR[2])","paste(SNR[3])")),
+         xiFTSVD1=sqrt(xiFTSVD1),
+         xiSupFTSVD1=sqrt(xiSupFTSVD1)) %>%
+  dplyr::select(Tau,n,comp,Grid,SNR,Tau,FTSVD1MP,bFTSVD1,xiFTSVD1,SupFTSVD1CM,bSupFTSVD1,xiSupFTSVD1,FTSVD1,SupFTSVD1,Cov2R,SupCov2R,AR2_FTSVD1,AR2_SupFTSVD1) %>%
+  set_names("Tau","n","Comp","Grid","SNR","a_FTSVD","b_FTSVD","c_FTSVD","a_SupFTSVD","b_SupFTSVD","c_SupFTSVD","d_FTSVD","d_SupFTSVD","e_FTSVD","e_SupFTSVD","f_FTSVD","f_SupFTSVD") %>%
+  pivot_longer(cols = ends_with("FTSVD"),names_to = c("Var",".value"),
+               names_sep = "_") %>% 
+  pivot_longer(cols=c("FTSVD","SupFTSVD"),values_to = "FuncV",names_to = "Method") %>%
+  mutate(SamT=factor(ifelse(Tau==1,"paste(sigma^2==1)","paste(sigma^2==4)"),
+                   levels=c("paste(sigma^2==1)","paste(sigma^2==4)")),
+         Model="1")
+```
+
+```{r}
+Res2_dat_us<-Res2g3us %>%
+  mutate(SNR=ifelse(Sig2E==1,"paste(SNR[1])",ifelse(Sig2E==2,"paste(SNR[2])","paste(SNR[3])")),
+         xiFTSVD1=sqrt(xiFTSVD1),
+         xiSupFTSVD1=sqrt(xiSupFTSVD1)) %>%
+  dplyr::select(Tau,n,comp,Grid,SNR,Tau,FTSVD1MP,bFTSVD1,xiFTSVD1,SupFTSVD1CM,bSupFTSVD1,xiSupFTSVD1,FTSVD1,SupFTSVD1,Cov2R,SupCov2R,AR2_FTSVD1,AR2_SupFTSVD1) %>%
+  set_names("Tau","n","Comp","Grid","SNR","a_FTSVD","b_FTSVD","c_FTSVD","a_SupFTSVD","b_SupFTSVD","c_SupFTSVD","d_FTSVD","d_SupFTSVD","e_FTSVD","e_SupFTSVD","f_FTSVD","f_SupFTSVD") %>%
+  pivot_longer(cols = ends_with("FTSVD"),names_to = c("Var",".value"),
+               names_sep = "_") %>% 
+  pivot_longer(cols=c("FTSVD","SupFTSVD"),values_to = "FuncV",names_to = "Method") %>%
+  mutate(SamT=factor(ifelse(Tau==1,"paste(sigma^2==1)","paste(sigma^2==4)"),
+                   levels=c("paste(sigma^2==1)","paste(sigma^2==4)")),
+         Model="1")
+```
+
+```{r}
+Res3_dat<-Res3g3 %>%
+  mutate(SNR=ifelse(Sig2E==1|Sig2E==1.5,1,ifelse(Sig2E==2|Sig2E==2.25,2,3))) %>%
+  mutate(xiFTSVD1=sqrt(xiFTSVD1),
+         xiSupFTSVD1=sqrt(xiSupFTSVD1)) %>%
+  dplyr::select(Tau,n,comp,Grid,SNR,Tau,FTSVD1MP,bFTSVD1,xiFTSVD1,SupFTSVD1CM,bSupFTSVD1,xiSupFTSVD1,FTSVD1,SupFTSVD1,Cov2R,SupCov2R,AR2_FTSVD1,AR2_SupFTSVD1) %>%
+  set_names("Tau","n","Comp","Grid","SNR","a_FTSVD","b_FTSVD","c_FTSVD","a_SupFTSVD","b_SupFTSVD","c_SupFTSVD","d_FTSVD","d_SupFTSVD","e_FTSVD","e_SupFTSVD","f_FTSVD","f_SupFTSVD") %>%
+  pivot_longer(cols = ends_with("FTSVD"),names_to = c("Var",".value"),
+               names_sep = "_") %>%
+  pivot_longer(c("FTSVD","SupFTSVD"),names_to = "Method",values_to = "FuncV") %>%
+  mutate(SNR=recode(SNR,
+                    "1"="paste(SNR[1])",
+                    "2"="paste(SNR[2])",
+                    "3"="paste(SNR[3])"),
+         SamT=factor(ifelse(Tau==1,"paste(sigma^2==1)","paste(sigma^2==4)"),levels=c("paste(sigma^2==1)","paste(sigma^2==4)")),
+         Model="2")
+```
+
+```{r}
+Res3_dat_us<-Res3g3us %>%
+  mutate(SNR=ifelse(Sig2E==1|Sig2E==1.5,1,ifelse(Sig2E==2|Sig2E==2.25,2,3))) %>%
+  mutate(xiFTSVD1=sqrt(xiFTSVD1),
+         xiSupFTSVD1=sqrt(xiSupFTSVD1)) %>%
+  dplyr::select(Tau,n,comp,Grid,SNR,Tau,FTSVD1MP,bFTSVD1,xiFTSVD1,SupFTSVD1CM,bSupFTSVD1,xiSupFTSVD1,FTSVD1,SupFTSVD1,Cov2R,SupCov2R,AR2_FTSVD1,AR2_SupFTSVD1) %>%
+  set_names("Tau","n","Comp","Grid","SNR","a_FTSVD","b_FTSVD","c_FTSVD","a_SupFTSVD","b_SupFTSVD","c_SupFTSVD","d_FTSVD","d_SupFTSVD","e_FTSVD","e_SupFTSVD","f_FTSVD","f_SupFTSVD") %>%
+  pivot_longer(cols = ends_with("FTSVD"),names_to = c("Var",".value"),
+               names_sep = "_") %>%
+  pivot_longer(c("FTSVD","SupFTSVD"),names_to = "Method",values_to = "FuncV") %>%
+  mutate(SNR=recode(SNR,
+                    "1"="paste(SNR[1])",
+                    "2"="paste(SNR[2])",
+                    "3"="paste(SNR[3])"),
+         SamT=factor(ifelse(Tau==1,"paste(sigma^2==1)","paste(sigma^2==4)"),levels=c("paste(sigma^2==1)","paste(sigma^2==4)")),
+         Model="2")
+```
+
+
+### Xb
+
+```{r}
+Res2_dat %>%
+  add_case(Res3_dat) %>%
+  add_case(Res2_dat_us) %>%
+  add_case(Res3_dat_us) %>%
+  mutate(Scenario=rep(c("Sup","USup"),c(nrow(Res2_dat)+nrow(Res3_dat),nrow(Res2_dat_us)+nrow(Res3_dat_us)))) %>%
+  group_by(Tau,n,Comp,Method,Model,SNR,Var,Scenario) %>%
+  mutate(Iter=row_number()) %>%
+  ungroup() %>%
+  mutate(ModelCompTau=paste("paste(sigma^2==",Tau,"~","(list(k==",Comp,",r==",Model,")))",sep=""))%>%
+  mutate(ModelComp=factor(ifelse(Model=="1" & Comp=="1","paste(list(k==1,r==1))",
+                         ifelse(Model=="2" & Comp=="1","paste(list(k==1,r==2))","paste(list(k==2,r==2))")),labels = c(expression("("*list(k==1,r==1)*")"), expression("("*list(k==1,r==2)*")"),expression("("*list(k==2,r==2)*")")))) %>%
+  mutate(TauSNR=paste("paste(sigma^2==",Tau,"~","(",SNR,"))",sep="")) %>%
+  filter(Var=="a") %>%
+  group_by(ModelComp,TauSNR,n,Scenario,Method) %>%
+  summarise_if(is.numeric,c("mean","sd","length")) %>%
+  ggplot(aes(x=n,y=FuncV_mean,group=interaction(Method,Scenario),color=Method)) +
+  geom_line(aes(linetype=Scenario)) +
+  geom_errorbar(aes(ymin=FuncV_mean-2*(FuncV_sd/sqrt(FuncV_length)),ymax=FuncV_mean+2*(FuncV_sd/sqrt(FuncV_length)),linetype=Scenario),
+                position=position_dodge(5)) +
+  facet_grid(rows = vars(ModelComp),cols = vars(TauSNR),scales = "free_y",labeller = label_parsed)+
+  xlab(expression("Number of subjects (n)")) +
+  ylab(expression(sqrt("MSE("*bold(x)[i]^{T}*hat(bold(beta))[k]*")"))) +
+  theme(legend.title = element_blank(),
+        legend.position = "top",legend.background = element_rect(fill = "transparent"),legend.direction = "horizontal",legend.box = "horizontal")+
+  scale_color_manual(values=c("#F8766D","#619CFF")) +
+  scale_linetype_manual(values=c(1,2),labels=c(expression(bold(beta)[k]!=0),expression(bold(beta)[k]==0)))
+ggsave(filename = "r12susp_errbr_xb.pdf",height = 6,width=12,unit="in")
+```
+
+### Xi
+
+```{r}
+Res2_dat %>%
+  add_case(Res3_dat) %>%
+  add_case(Res2_dat_us) %>%
+  add_case(Res3_dat_us) %>%
+  mutate(Scenario=rep(c("Sup","USup"),c(nrow(Res2_dat)+nrow(Res3_dat),nrow(Res2_dat_us)+nrow(Res3_dat_us)))) %>%
+  group_by(Tau,n,Comp,Method,Model,SNR,Var,Scenario) %>%
+  mutate(Iter=row_number()) %>%
+  ungroup() %>%
+  mutate(ModelCompTau=paste("paste(sigma^2==",Tau,"~","(list(k==",Comp,",r==",Model,")))",sep=""))%>%
+  mutate(ModelComp=factor(ifelse(Model=="1" & Comp=="1","paste(list(k==1,r==1))",
+                         ifelse(Model=="2" & Comp=="1","paste(list(k==1,r==2))","paste(list(k==2,r==2))")),labels = c(expression("("*list(k==1,r==1)*")"), expression("("*list(k==1,r==2)*")"),expression("("*list(k==2,r==2)*")")))) %>%
+  mutate(TauSNR=paste("paste(sigma^2==",Tau,"~","(",SNR,"))",sep="")) %>%
+  filter(Var=="b") %>%
+  group_by(ModelComp,TauSNR,n,Scenario,Method) %>%
+  summarise_if(is.numeric,c("mean","sd","length")) %>%
+  ggplot(aes(x=n,y=FuncV_mean,group=interaction(Method,Scenario),color=Method)) +
+  geom_line(aes(linetype=Scenario)) +
+  geom_errorbar(aes(ymin=FuncV_mean-2*(FuncV_sd/sqrt(FuncV_length)),ymax=FuncV_mean+2*(FuncV_sd/sqrt(FuncV_length)),linetype=Scenario),
+                position=position_dodge(5)) +
+  facet_grid(rows = vars(ModelComp),cols = vars(TauSNR),scales = "free_y",labeller = label_parsed)+
+  xlab(expression("Number of subjects (n)")) +
+  ylab(expression("||"*hat(bold(xi))[k]-bold(xi)[k]*"||"[2])) +
+  theme(legend.title = element_blank(),
+        legend.position = "top",legend.background = element_rect(fill = "transparent"),legend.direction = "horizontal",legend.box = "horizontal")+
+  scale_color_manual(values=c("#F8766D","#619CFF")) +
+  scale_linetype_manual(values=c(1,2),labels=c(expression(bold(beta)[k]!=0),expression(bold(beta)[k]==0)))
+ggsave(filename = "r12susp_errbr_xi.pdf",height = 6,width=12,unit="in")
+```
+### PSi
+```{r}
+Res2_dat %>%
+  add_case(Res3_dat) %>%
+  add_case(Res2_dat_us) %>%
+  add_case(Res3_dat_us) %>%
+  mutate(Scenario=rep(c("Sup","USup"),c(nrow(Res2_dat)+nrow(Res3_dat),nrow(Res2_dat_us)+nrow(Res3_dat_us)))) %>%
+  group_by(Tau,n,Comp,Method,Model,SNR,Var,Scenario) %>%
+  mutate(Iter=row_number()) %>%
+  ungroup() %>%
+  mutate(ModelCompTau=paste("paste(sigma^2==",Tau,"~","(list(k==",Comp,",r==",Model,")))",sep=""))%>%
+  mutate(ModelComp=factor(ifelse(Model=="1" & Comp=="1","paste(list(k==1,r==1))",
+                         ifelse(Model=="2" & Comp=="1","paste(list(k==1,r==2))","paste(list(k==2,r==2))")),labels = c(expression("("*list(k==1,r==1)*")"), expression("("*list(k==1,r==2)*")"),expression("("*list(k==2,r==2)*")")))) %>%
+  mutate(TauSNR=paste("paste(sigma^2==",Tau,"~","(",SNR,"))",sep="")) %>%
+  filter(Var=="c") %>%
+  group_by(ModelComp,TauSNR,n,Scenario,Method) %>%
+  summarise_if(is.numeric,c("mean","sd","length")) %>%
+  ggplot(aes(x=n,y=FuncV_mean,group=interaction(Method,Scenario),color=Method)) +
+  geom_line(aes(linetype=Scenario)) +
+  geom_errorbar(aes(ymin=FuncV_mean-2*(FuncV_sd/sqrt(FuncV_length)),ymax=FuncV_mean+2*(FuncV_sd/sqrt(FuncV_length)),linetype=Scenario),
+                position=position_dodge(5)) +
+  facet_grid(rows = vars(ModelComp),cols = vars(TauSNR),scales = "free_y",labeller = label_parsed)+
+  xlab(expression("Number of subjects (n)")) +
+  ylab(expression(sqrt(integral("{"*hat(psi[k])(t)-psi[k](t)*"}"^2*dt,t,"")))) +
+  theme(legend.title = element_blank(),
+        legend.position = "top",legend.background = element_rect(fill = "transparent"),legend.direction = "horizontal",legend.box = "horizontal")+
+  scale_color_manual(values=c("#F8766D","#619CFF")) +
+  scale_linetype_manual(values=c(1,2),labels=c(expression(bold(beta)[k]!=0),expression(bold(beta)[k]==0)))
+ggsave(filename = "r12susp_errbr_psi.pdf",height = 6,width=12,unit="in")
+```
+
+### R2 Subject
+```{r}
+Res2_dat %>%
+  add_case(Res3_dat) %>%
+  add_case(Res2_dat_us) %>%
+  add_case(Res3_dat_us) %>%
+  mutate(Scenario=rep(c("Sup","USup"),c(nrow(Res2_dat)+nrow(Res3_dat),nrow(Res2_dat_us)+nrow(Res3_dat_us)))) %>%
+  group_by(Tau,n,Comp,Method,Model,SNR,Var,Scenario) %>%
+  mutate(Iter=row_number()) %>%
+  ungroup() %>%
+  mutate(ModelCompTau=paste("paste(sigma^2==",Tau,"~","(list(k==",Comp,",r==",Model,")))",sep=""))%>%
+  mutate(ModelComp=factor(ifelse(Model=="1" & Comp=="1","paste(list(k==1,r==1))",
+                         ifelse(Model=="2" & Comp=="1","paste(list(k==1,r==2))","paste(list(k==2,r==2))")),labels = c(expression("("*list(k==1,r==1)*")"), expression("("*list(k==1,r==2)*")"),expression("("*list(k==2,r==2)*")")))) %>%
+  mutate(TauSNR=paste("paste(sigma^2==",Tau,"~","(",SNR,"))",sep="")) %>%
+  filter(Var=="e") %>%
+  group_by(ModelComp,TauSNR,n,Scenario,Method) %>%
+  summarise_if(is.numeric,c("mean","sd","length")) %>%
+  ggplot(aes(x=n,y=FuncV_mean,group=interaction(Method,Scenario),color=Method)) +
+  geom_line(aes(linetype=Scenario)) +
+  geom_errorbar(aes(ymin=FuncV_mean-2*(FuncV_sd/sqrt(FuncV_length)),ymax=FuncV_mean+2*(FuncV_sd/sqrt(FuncV_length)),linetype=Scenario),
+                position=position_dodge(5)) +
+  facet_grid(rows = vars(ModelComp),cols = vars(TauSNR),scales = "free_y",labeller = label_parsed)+
+  xlab(expression("Number of subjects (n)")) +
+  ylab(expression("Coefficient of determination, "*R^2*", for "*zeta[ik])) +
+  theme(legend.title = element_blank(),
+        legend.position = "top",legend.background = element_rect(fill = "transparent"),legend.direction = "horizontal",legend.box = "horizontal")+
+  scale_color_manual(values=c("#F8766D","#619CFF")) +
+  scale_linetype_manual(values=c(1,2),labels=c(expression(bold(beta)[k]!=0),expression(bold(beta)[k]==0)))
+ggsave(filename = "r12susp_errbr_r2zeta.pdf",height = 6,width=12,unit="in")
+```
+
+```{r}
+# a different version of the previous figure
+Res2_dat %>%
+  add_case(Res3_dat) %>%
+  add_case(Res2_dat_us) %>%
+  add_case(Res3_dat_us) %>%
+  mutate(Scenario=rep(c("Sup","USup"),c(nrow(Res2_dat)+nrow(Res3_dat),nrow(Res2_dat_us)+nrow(Res3_dat_us)))) %>%
+  group_by(Tau,n,Comp,Method,Model,SNR,Var,Scenario) %>%
+  mutate(Iter=row_number()) %>%
+  ungroup() %>%
+  mutate(ModelCompTau=paste("paste(sigma^2==",Tau,"~","(list(k==",Comp,",r==",Model,")))",sep=""))%>%
+  mutate(ModelComp=factor(ifelse(Model=="1" & Comp=="1","paste(list(k==1,r==1))",
+                         ifelse(Model=="2" & Comp=="1","paste(list(k==1,r==2))","paste(list(k==2,r==2))")),labels = c(expression("("*list(k==1,r==1)*")"), expression("("*list(k==1,r==2)*")"),expression("("*list(k==2,r==2)*")")))) %>%
+  mutate(TauSNR=paste("paste(sigma^2==",Tau,"~","(",SNR,"))",sep="")) %>%
+  filter(Var=="e") %>%
+  group_by(ModelComp,Tau,SNR,n,Scenario,Method) %>%
+  summarise_if(is.numeric,c("mean","sd","length")) %>%
+  mutate(Scenario=ifelse(Scenario=="Sup","paste(bold(beta)[k]!=0)","paste(bold(beta)[k]==0)")) %>%
+  ggplot(aes(x=n,y=FuncV_mean,group=interaction(Method,Tau),color=Method)) +
+  geom_line(aes(linetype=as.factor(Tau))) +
+  geom_errorbar(aes(ymin=FuncV_mean-2*(FuncV_sd/sqrt(FuncV_length)),ymax=FuncV_mean+2*(FuncV_sd/sqrt(FuncV_length)),linetype=as.factor(Tau)),
+                position=position_dodge(5)) +
+  facet_nested(ModelComp~Scenario+SNR,scales = "free_y",labeller = label_parsed,nest_line = element_line(linetype = 2)) + 
+  xlab(expression("Number of subjects (n)")) +
+  ylab(expression("Coefficient of determination, "*R^2*", for "*zeta[ik])) +
+  theme(legend.title = element_blank(),
+        legend.position = "top",
+        legend.background = element_rect(fill = "transparent",linetype = 0),
+        legend.direction = "horizontal",
+        legend.box = "horizontal",
+        panel.background = element_rect(fill = "white",colour = NA), 
+        panel.border = element_rect(fill = NA, colour = "grey20"), 
+        panel.grid = element_line(colour = "grey92"), 
+        panel.grid.minor = element_line(linewidth = rel(0.5)), 
+        strip.background = element_rect(fill = "grey92", 
+                                        colour = "grey92"), complete = TRUE)+
+  scale_color_manual(values=c("#F8766D","#619CFF")) +
+  scale_linetype_manual(values=c(1,4),labels=c(expression(sigma^2==1),expression(sigma^2==4)))
+ggsave(filename = "r12susp_errbr_r2zeta_v1.pdf",height = 6,width=12,unit="in")
+```
+
+### R2 tensor
+
+```{r}
+Res2_dat %>%
+  add_case(Res3_dat) %>%
+  add_case(Res2_dat_us) %>%
+  add_case(Res3_dat_us) %>%
+  mutate(Scenario=rep(c("Sup","USup"),c(nrow(Res2_dat)+nrow(Res3_dat),nrow(Res2_dat_us)+nrow(Res3_dat_us)))) %>%
+  group_by(Tau,n,Comp,Method,Model,SNR,Var,Scenario) %>%
+  mutate(Iter=row_number()) %>%
+  ungroup() %>%
+  mutate(ModelCompTau=paste("paste(sigma^2==",Tau,"~","(list(k==",Comp,",r==",Model,")))",sep=""))%>%
+  mutate(ModelTau=factor(paste("paste(sigma^2==",Tau,"~","(r==",Model,"))",sep=""),labels = c("paste(sigma^2==1(r==1))","paste(sigma^2==4(r==1))","paste(sigma^2==1(r==2))","paste(sigma^2==4(r==2))")))%>%
+  mutate(ModelComp=factor(ifelse(Model=="1" & Comp=="1","paste(list(k==1,r==1))",
+                         ifelse(Model=="2" & Comp=="1","paste(list(k==1,r==2))","paste(list(k==2,r==2))")),labels = c(expression("("*list(k==1,r==1)*")"), expression("("*list(k==1,r==2)*")"),expression("("*list(k==2,r==2)*")")))) %>%
+  mutate(TauSNR=paste("paste(sigma^2==",Tau,"~","(",SNR,"))",sep="")) %>%
+  filter(Var=="f") %>%
+  filter(!(Model==2 & Comp==1)) %>%
+  mutate(Model=recode(Model,
+                      "1"="rank-1",
+                      "2"="rank-2")) %>%
+  group_by(Model,TauSNR,n,Scenario,Method) %>%
+  summarise_if(is.numeric,c("mean","sd","length")) %>%
+  ggplot(aes(x=n,y=FuncV_mean,group=interaction(Method,Scenario),color=Method)) +
+  geom_line(aes(linetype=Scenario)) +
+  geom_errorbar(aes(ymin=FuncV_mean-2*(FuncV_sd/sqrt(FuncV_length)),ymax=FuncV_mean+2*(FuncV_sd/sqrt(FuncV_length)),linetype=Scenario),
+                position=position_dodge(5)) +
+  facet_grid(rows = vars(Model),cols = vars(TauSNR),scales = "free_y",labeller = label_parsed)+
+  xlab(expression("Number of subjects (n)")) +
+  ylab(expression("Coefficient of determination, "*R^2*", for "*Y[ij]^b)) +
+  theme(legend.title = element_blank(),
+        legend.position = "top",legend.background = element_rect(fill = "transparent"),legend.direction = "horizontal",legend.box = "horizontal")+
+  scale_color_manual(values=c("#F8766D","#619CFF")) +
+  scale_linetype_manual(values=c(1,2),labels=c(expression(bold(beta)[k]!=0),expression(bold(beta)[k]==0)))
+ggsave(filename = "r12susp_errbr_r2tensor.pdf",height = 5,width=8,unit="in")
+
+#"Coefficient of determination, "*R^2*", for "*Y[i]^(b)*"("*t[ij]*")"
+```
+
+```{r}
+# A different format of the previous figure
+Res2_dat %>%
+  add_case(Res3_dat) %>%
+  add_case(Res2_dat_us) %>%
+  add_case(Res3_dat_us) %>%
+  mutate(Scenario=rep(c("Sup","USup"),c(nrow(Res2_dat)+nrow(Res3_dat),nrow(Res2_dat_us)+nrow(Res3_dat_us)))) %>%
+  group_by(Tau,n,Comp,Method,Model,SNR,Var,Scenario) %>%
+  mutate(Iter=row_number()) %>%
+  ungroup() %>%
+  mutate(ModelCompTau=paste("paste(sigma^2==",Tau,"~","(list(k==",Comp,",r==",Model,")))",sep=""))%>%
+  mutate(ModelTau=factor(paste("paste(sigma^2==",Tau,"~","(r==",Model,"))",sep=""),labels = c("paste(sigma^2==1(r==1))","paste(sigma^2==4(r==1))","paste(sigma^2==1(r==2))","paste(sigma^2==4(r==2))")))%>%
+  mutate(ModelComp=factor(ifelse(Model=="1" & Comp=="1","paste(list(k==1,r==1))",
+                                 ifelse(Model=="2" & Comp=="1","paste(list(k==1,r==2))","paste(list(k==2,r==2))")),labels = c(expression("("*list(k==1,r==1)*")"), expression("("*list(k==1,r==2)*")"),expression("("*list(k==2,r==2)*")")))) %>%
+  mutate(TauSNR=paste("paste(sigma^2==",Tau,"~","(",SNR,"))",sep="")) %>%
+  filter(Var=="f") %>%
+  filter(!(Model==2 & Comp==1)) %>%
+  mutate(Model=recode(Model,
+                      "1"="rank-1",
+                      "2"="rank-2")) %>%
+  group_by(Model,Tau,SNR,n,Scenario,Method) %>%
+  summarise_if(is.numeric,c("mean","sd","length")) %>%
+  mutate(Scenario=ifelse(Scenario=="Sup","paste(bold(beta)[k]!=0)","paste(bold(beta)[k]==0)")) %>%
+  ggplot(aes(x=n,y=FuncV_mean,group=interaction(Method,Tau),color=Method)) +
+  geom_line(aes(linetype=as.factor(Tau))) +
+  geom_errorbar(aes(ymin=FuncV_mean-2*(FuncV_sd/sqrt(FuncV_length)),ymax=FuncV_mean+2*(FuncV_sd/sqrt(FuncV_length)),linetype=as.factor(Tau)),
+                position=position_dodge(5)) +
+  facet_nested(Model~Scenario+SNR,scales = "free_y",labeller = label_parsed,nest_line = element_line(linetype = 2)) + 
+  #facet_grid(rows = vars(Model),cols = vars(Scenario,SNR),scales = "free_y",labeller = label_parsed)+
+  xlab(expression("Number of subjects (n)")) +
+  ylab(expression("Coefficient of determination, "*R^2*", for "*Y[ij]^b)) +
+  theme(legend.title = element_blank(),
+        legend.position = "top",
+        legend.background = element_rect(fill = "transparent",linetype = 0),
+        legend.direction = "horizontal",
+        legend.box = "horizontal",
+        panel.background = element_rect(fill = "white",colour = NA), 
+        panel.border = element_rect(fill = NA, colour = "grey20"), 
+        panel.grid = element_line(colour = "grey92"), 
+        panel.grid.minor = element_line(linewidth = rel(0.5)), 
+        strip.background = element_rect(fill = "grey92", 
+                                        colour = "grey92"), complete = TRUE)+
+  scale_color_manual(values=c("#F8766D","#619CFF")) +
+  scale_linetype_manual(values=c(1,4),labels=c(expression(sigma^2==1),expression(sigma^2==4)))  
+
+ggsave(filename = "r12susp_errbr_r2tensor_v1.pdf",height = 5,width=8,unit="in")
+```
+
+
+
+# Grid Density: Supervision
+
+## Combined results
+
+```{r}
+Res2g3<-read.csv(paste(dirP,fname[3],sep = ""))
+Res3g3<-read.csv(paste(dirP,fname[4],sep = ""))
+Res2g3us<-read.csv(paste(dirP,fname[9],sep = ""))
+Res3g3us<-read.csv(paste(dirP,fname[10],sep = ""))
+```
+
+```{r}
+Res2_dat<-Res2g3 %>%
+  mutate(SNR=ifelse(Sig2E==1,"paste(SNR[1])",ifelse(Sig2E==2,"paste(SNR[2])","paste(SNR[3])")),
+         xiFTSVD1=sqrt(xiFTSVD1),
+         xiSupFTSVD1=sqrt(xiSupFTSVD1)) %>%
+  dplyr::select(Tau,n,comp,Grid,SNR,Tau,FTSVD1MP,bFTSVD1,xiFTSVD1,SupFTSVD1CM,bSupFTSVD1,xiSupFTSVD1,FTSVD1,SupFTSVD1,Cov2R,SupCov2R,AR2_FTSVD1,AR2_SupFTSVD1) %>%
+  set_names("Tau","n","Comp","Grid","SNR","a_FTSVD","b_FTSVD","c_FTSVD","a_SupFTSVD","b_SupFTSVD","c_SupFTSVD","d_FTSVD","d_SupFTSVD","e_FTSVD","e_SupFTSVD","f_FTSVD","f_SupFTSVD") %>%
+  pivot_longer(cols = ends_with("FTSVD"),names_to = c("Var",".value"),
+               names_sep = "_") %>% 
+  pivot_longer(cols=c("FTSVD","SupFTSVD"),values_to = "FuncV",names_to = "Method") %>%
+  mutate(SamT=factor(ifelse(Tau==1,"paste(sigma^2==1)","paste(sigma^2==4)"),
+                   levels=c("paste(sigma^2==1)","paste(sigma^2==4)")),
+         Model="1")
+```
+
+```{r}
+Res2_dat_us<-Res2g3us %>%
+  mutate(SNR=ifelse(Sig2E==1,"paste(SNR[1])",ifelse(Sig2E==2,"paste(SNR[2])","paste(SNR[3])")),
+         xiFTSVD1=sqrt(xiFTSVD1),
+         xiSupFTSVD1=sqrt(xiSupFTSVD1)) %>%
+  dplyr::select(Tau,n,comp,Grid,SNR,Tau,FTSVD1MP,bFTSVD1,xiFTSVD1,SupFTSVD1CM,bSupFTSVD1,xiSupFTSVD1,FTSVD1,SupFTSVD1,Cov2R,SupCov2R,AR2_FTSVD1,AR2_SupFTSVD1) %>%
+  set_names("Tau","n","Comp","Grid","SNR","a_FTSVD","b_FTSVD","c_FTSVD","a_SupFTSVD","b_SupFTSVD","c_SupFTSVD","d_FTSVD","d_SupFTSVD","e_FTSVD","e_SupFTSVD","f_FTSVD","f_SupFTSVD") %>%
+  pivot_longer(cols = ends_with("FTSVD"),names_to = c("Var",".value"),
+               names_sep = "_") %>% 
+  pivot_longer(cols=c("FTSVD","SupFTSVD"),values_to = "FuncV",names_to = "Method") %>%
+  mutate(SamT=factor(ifelse(Tau==1,"paste(sigma^2==1)","paste(sigma^2==4)"),
+                   levels=c("paste(sigma^2==1)","paste(sigma^2==4)")),
+         Model="1")
+```
+
+
+```{r}
+Res3_dat<-Res3g3 %>%
+  mutate(SNR=ifelse(Sig2E==1|Sig2E==1.5,1,ifelse(Sig2E==2|Sig2E==2.25,2,3))) %>%
+  mutate(xiFTSVD1=sqrt(xiFTSVD1),
+         xiSupFTSVD1=sqrt(xiSupFTSVD1)) %>%
+  dplyr::select(Tau,n,comp,Grid,SNR,Tau,FTSVD1MP,bFTSVD1,xiFTSVD1,SupFTSVD1CM,bSupFTSVD1,xiSupFTSVD1,FTSVD1,SupFTSVD1,Cov2R,SupCov2R,AR2_FTSVD1,AR2_SupFTSVD1) %>%
+  set_names("Tau","n","Comp","Grid","SNR","a_FTSVD","b_FTSVD","c_FTSVD","a_SupFTSVD","b_SupFTSVD","c_SupFTSVD","d_FTSVD","d_SupFTSVD","e_FTSVD","e_SupFTSVD","f_FTSVD","f_SupFTSVD") %>%
+  pivot_longer(cols = ends_with("FTSVD"),names_to = c("Var",".value"),
+               names_sep = "_") %>%
+  pivot_longer(c("FTSVD","SupFTSVD"),names_to = "Method",values_to = "FuncV") %>%
+  mutate(SNR=recode(SNR,
+                    "1"="paste(SNR[1])",
+                    "2"="paste(SNR[2])",
+                    "3"="paste(SNR[3])"),
+         SamT=factor(ifelse(Tau==1,"paste(sigma^2==1)","paste(sigma^2==4)"),levels=c("paste(sigma^2==1)","paste(sigma^2==4)")),
+         Model="2")
+```
+
+```{r}
+Res3_dat_us<-Res3g3us %>%
+  mutate(SNR=ifelse(Sig2E==1|Sig2E==1.5,1,ifelse(Sig2E==2|Sig2E==2.25,2,3))) %>%
+  mutate(xiFTSVD1=sqrt(xiFTSVD1),
+         xiSupFTSVD1=sqrt(xiSupFTSVD1)) %>%
+  dplyr::select(Tau,n,comp,Grid,SNR,Tau,FTSVD1MP,bFTSVD1,xiFTSVD1,SupFTSVD1CM,bSupFTSVD1,xiSupFTSVD1,FTSVD1,SupFTSVD1,Cov2R,SupCov2R,AR2_FTSVD1,AR2_SupFTSVD1) %>%
+  set_names("Tau","n","Comp","Grid","SNR","a_FTSVD","b_FTSVD","c_FTSVD","a_SupFTSVD","b_SupFTSVD","c_SupFTSVD","d_FTSVD","d_SupFTSVD","e_FTSVD","e_SupFTSVD","f_FTSVD","f_SupFTSVD") %>%
+  pivot_longer(cols = ends_with("FTSVD"),names_to = c("Var",".value"),
+               names_sep = "_") %>%
+  pivot_longer(c("FTSVD","SupFTSVD"),names_to = "Method",values_to = "FuncV") %>%
+  mutate(SNR=recode(SNR,
+                    "1"="paste(SNR[1])",
+                    "2"="paste(SNR[2])",
+                    "3"="paste(SNR[3])"),
+         SamT=factor(ifelse(Tau==1,"paste(sigma^2==1)","paste(sigma^2==4)"),levels=c("paste(sigma^2==1)","paste(sigma^2==4)")),
+         Model="2")
+```
+
+
+### Xb
+
+```{r}
+Res2_dat %>%
+  add_case(Res3_dat) %>%
+  add_case(Res2_dat_us) %>%
+  add_case(Res3_dat_us) %>%
+  mutate(Scenario=rep(c("Sup","USup"),c(nrow(Res2_dat)+nrow(Res3_dat),nrow(Res2_dat_us)+nrow(Res3_dat_us)))) %>%
+  group_by(Tau,Grid,Comp,Method,Model,SNR,Var,Scenario) %>%
+  mutate(Iter=row_number()) %>%
+  ungroup() %>%
+  mutate(ModelCompTau=paste("paste(sigma^2==",Tau,"~","(list(k==",Comp,",r==",Model,")))",sep=""))%>%
+  mutate(ModelComp=factor(ifelse(Model=="1" & Comp=="1","paste(list(k==1,r==1))",
+                         ifelse(Model=="2" & Comp=="1","paste(list(k==1,r==2))","paste(list(k==2,r==2))")),labels = c(expression("("*list(k==1,r==1)*")"), expression("("*list(k==1,r==2)*")"),expression("("*list(k==2,r==2)*")")))) %>%
+  mutate(TauSNR=paste("paste(sigma^2==",Tau,"~","(",SNR,"))",sep="")) %>%
+  filter(Var=="a") %>%
+  group_by(ModelComp,TauSNR,Grid,Scenario,Method) %>%
+  summarise_if(is.numeric,c("mean","sd","length")) %>%
+  ggplot(aes(x=Grid,y=FuncV_mean,group=interaction(Method,Scenario),color=Method)) +
+  geom_line(aes(linetype=Scenario)) +
+  geom_errorbar(aes(ymin=FuncV_mean-2*(FuncV_sd/sqrt(FuncV_length)),ymax=FuncV_mean+2*(FuncV_sd/sqrt(FuncV_length)),linetype=Scenario),
+                position=position_dodge(0.1)) +
+  facet_grid(rows = vars(ModelComp),cols = vars(TauSNR),scales = "free_y",labeller = label_parsed)+
+  xlab(expression("Number of observations ("*m[i]*")")) +
+  ylab(expression(sqrt("MSE("*bold(x)[i]^{T}*hat(bold(beta))[k]*")"))) +
+  theme(legend.title = element_blank(),
+        legend.position = "top",legend.background = element_rect(fill = "transparent"),legend.direction = "horizontal",legend.box = "horizontal")+
+  scale_color_manual(values=c("#F8766D","#619CFF")) +
+  scale_linetype_manual(values=c(1,2),labels=c(expression(bold(beta)[k]!=0),expression(bold(beta)[k]==0)))
+ggsave(filename = "r12susp_errbr_xb_gd.pdf",height = 6,width=12,unit="in")
+```
+
+### Xi
+
+```{r}
+Res2_dat %>%
+  add_case(Res3_dat) %>%
+  add_case(Res2_dat_us) %>%
+  add_case(Res3_dat_us) %>%
+  mutate(Scenario=rep(c("Sup","USup"),c(nrow(Res2_dat)+nrow(Res3_dat),nrow(Res2_dat_us)+nrow(Res3_dat_us)))) %>%
+  group_by(Tau,Grid,Comp,Method,Model,SNR,Var,Scenario) %>%
+  mutate(Iter=row_number()) %>%
+  ungroup() %>%
+  mutate(ModelCompTau=paste("paste(sigma^2==",Tau,"~","(list(k==",Comp,",r==",Model,")))",sep=""))%>%
+  mutate(ModelComp=factor(ifelse(Model=="1" & Comp=="1","paste(list(k==1,r==1))",
+                         ifelse(Model=="2" & Comp=="1","paste(list(k==1,r==2))","paste(list(k==2,r==2))")),labels = c(expression("("*list(k==1,r==1)*")"), expression("("*list(k==1,r==2)*")"),expression("("*list(k==2,r==2)*")")))) %>%
+  mutate(TauSNR=paste("paste(sigma^2==",Tau,"~","(",SNR,"))",sep="")) %>%
+  filter(Var=="b") %>%
+  group_by(ModelComp,TauSNR,Grid,Scenario,Method) %>%
+  summarise_if(is.numeric,c("mean","sd","length")) %>%
+  ggplot(aes(x=Grid,y=FuncV_mean,group=interaction(Method,Scenario),color=Method)) +
+  geom_line(aes(linetype=Scenario)) +
+  geom_errorbar(aes(ymin=FuncV_mean-2*(FuncV_sd/sqrt(FuncV_length)),ymax=FuncV_mean+2*(FuncV_sd/sqrt(FuncV_length)),linetype=Scenario),
+                position=position_dodge(0.1)) +
+  facet_grid(rows = vars(ModelComp),cols = vars(TauSNR),scales = "free_y",labeller = label_parsed)+
+  xlab(expression("Number of observations ("*m[i]*")")) +
+  ylab(expression("||"*bold(xi)[k]-hat(bold(xi))[k]*"||"[2])) +
+  theme(legend.title = element_blank(),
+        legend.position = "top",legend.background = element_rect(fill = "transparent"),legend.direction = "horizontal",legend.box = "horizontal")+
+  scale_color_manual(values=c("#F8766D","#619CFF")) +
+  scale_linetype_manual(values=c(1,2),labels=c(expression(bold(beta)[k]!=0),expression(bold(beta)[k]==0)))
+ggsave(filename = "r12susp_errbr_xi_gd.pdf",height = 6,width=12,unit="in")
+```
+### PSi
+```{r}
+Res2_dat %>%
+  add_case(Res3_dat) %>%
+  add_case(Res2_dat_us) %>%
+  add_case(Res3_dat_us) %>%
+  mutate(Scenario=rep(c("Sup","USup"),c(nrow(Res2_dat)+nrow(Res3_dat),nrow(Res2_dat_us)+nrow(Res3_dat_us)))) %>%
+  group_by(Tau,Grid,Comp,Method,Model,SNR,Var,Scenario) %>%
+  mutate(Iter=row_number()) %>%
+  ungroup() %>%
+  mutate(ModelCompTau=paste("paste(sigma^2==",Tau,"~","(list(k==",Comp,",r==",Model,")))",sep=""))%>%
+  mutate(ModelComp=factor(ifelse(Model=="1" & Comp=="1","paste(list(k==1,r==1))",
+                         ifelse(Model=="2" & Comp=="1","paste(list(k==1,r==2))","paste(list(k==2,r==2))")),labels = c(expression("("*list(k==1,r==1)*")"), expression("("*list(k==1,r==2)*")"),expression("("*list(k==2,r==2)*")")))) %>%
+  mutate(TauSNR=paste("paste(sigma^2==",Tau,"~","(",SNR,"))",sep="")) %>%
+  filter(Var=="c") %>%
+  group_by(ModelComp,TauSNR,Grid,Scenario,Method) %>%
+  summarise_if(is.numeric,c("mean","sd","length")) %>%
+  #filter(Scenario=="Sup") %>%
+  ggplot(aes(x=Grid,y=FuncV_mean,group=interaction(Method,Scenario),color=Method)) +
+  geom_line(aes(linetype=Scenario)) +
+  geom_errorbar(aes(ymin=FuncV_mean-2*(FuncV_sd/sqrt(FuncV_length)),ymax=FuncV_mean+2*(FuncV_sd/sqrt(FuncV_length)),linetype=Scenario),
+                position=position_dodge(0.10)) +
+  facet_grid(rows = vars(ModelComp),cols = vars(TauSNR),scales = "free_y",labeller = label_parsed)+
+  xlab(expression("Number of observations ("*m[i]*")")) +
+  ylab(expression(sqrt(integral("{"*psi[k](t)-hat(psi[k])(t)*"}"^2*dt,t,"")))) +
+  theme(legend.title = element_blank(),
+        legend.position = "top",legend.background = element_rect(fill = "transparent"),legend.direction = "horizontal",legend.box = "horizontal")+
+  scale_color_manual(values=c("#F8766D","#619CFF")) +
+  scale_linetype_manual(values=c(1,2),labels=c(expression(bold(beta)[k]!=0),expression(bold(beta)[k]==0)))
+ggsave(filename = "r12susp_errbr_psi_gd.pdf",height = 6,width=12,unit="in")
+```
+
+### R2 Subject
+```{r}
+Res2_dat %>%
+  add_case(Res3_dat) %>%
+  add_case(Res2_dat_us) %>%
+  add_case(Res3_dat_us) %>%
+  mutate(Scenario=rep(c("Sup","USup"),c(nrow(Res2_dat)+nrow(Res3_dat),nrow(Res2_dat_us)+nrow(Res3_dat_us)))) %>%
+  group_by(Tau,Grid,Comp,Method,Model,SNR,Var,Scenario) %>%
+  mutate(Iter=row_number()) %>%
+  ungroup() %>%
+  mutate(ModelCompTau=paste("paste(sigma^2==",Tau,"~","(list(k==",Comp,",r==",Model,")))",sep=""))%>%
+  mutate(ModelComp=factor(ifelse(Model=="1" & Comp=="1","paste(list(k==1,r==1))",
+                         ifelse(Model=="2" & Comp=="1","paste(list(k==1,r==2))","paste(list(k==2,r==2))")),labels = c(expression("("*list(k==1,r==1)*")"), expression("("*list(k==1,r==2)*")"),expression("("*list(k==2,r==2)*")")))) %>%
+  mutate(TauSNR=paste("paste(sigma^2==",Tau,"~","(",SNR,"))",sep="")) %>%
+  filter(Var=="e") %>%
+  group_by(ModelComp,TauSNR,Grid,Scenario,Method) %>%
+  summarise_if(is.numeric,c("mean","sd","length")) %>%
+  ggplot(aes(x=Grid,y=FuncV_mean,group=interaction(Method,Scenario),color=Method)) +
+  geom_line(aes(linetype=Scenario)) +
+  geom_errorbar(aes(ymin=FuncV_mean-2*(FuncV_sd/sqrt(FuncV_length)),ymax=FuncV_mean+2*(FuncV_sd/sqrt(FuncV_length)),linetype=Scenario),
+                position=position_dodge(0.10)) +
+  facet_grid(rows = vars(ModelComp),cols = vars(TauSNR),scales = "free_y",labeller = label_parsed)+
+  xlab(expression("Number of observations ("*m[i]*")")) +
+  ylab(expression("Coefficient of determination, "*R^2*", for "*zeta[ik])) +
+  theme(legend.title = element_blank(),
+        legend.position = "top",legend.background = element_rect(fill = "transparent"),legend.direction = "horizontal",legend.box = "horizontal")+
+  scale_color_manual(values=c("#F8766D","#619CFF")) +
+  scale_linetype_manual(values=c(1,2),labels=c(expression(bold(beta)[k]!=0),expression(bold(beta)[k]==0)))
+ggsave(filename = "r12susp_errbr_r2zeta_gd.pdf",height = 6,width=12,unit="in")
+```
+
+### R2 Tensor
+
+```{r}
+Res2_dat %>%
+  add_case(Res3_dat) %>%
+  add_case(Res2_dat_us) %>%
+  add_case(Res3_dat_us) %>%
+  mutate(Scenario=rep(c("Sup","USup"),c(nrow(Res2_dat)+nrow(Res3_dat),nrow(Res2_dat_us)+nrow(Res3_dat_us)))) %>%
+  group_by(Tau,Grid,Comp,Method,Model,SNR,Var,Scenario) %>%
+  mutate(Iter=row_number()) %>%
+  ungroup() %>%
+  mutate(ModelCompTau=paste("paste(sigma^2==",Tau,"~","(list(k==",Comp,",r==",Model,")))",sep=""))%>%
+  mutate(ModelTau=factor(paste("paste(sigma^2==",Tau,"~","(r==",Model,"))",sep=""),labels = c("paste(sigma^2==1(r==1))","paste(sigma^2==4(r==1))","paste(sigma^2==1(r==2))","paste(sigma^2==4(r==2))")))%>%
+  mutate(ModelComp=factor(ifelse(Model=="1" & Comp=="1","paste(list(k==1,r==1))",
+                         ifelse(Model=="2" & Comp=="1","paste(list(k==1,r==2))","paste(list(k==2,r==2))")),labels = c(expression("("*list(k==1,r==1)*")"), expression("("*list(k==1,r==2)*")"),expression("("*list(k==2,r==2)*")")))) %>%
+  mutate(TauSNR=paste("paste(sigma^2==",Tau,"~","(",SNR,"))",sep="")) %>%
+  filter(Var=="f") %>%
+  filter(!(Model==2 & Comp==1)) %>%
+  mutate(Model=recode(Model,
+                      "1"="rank-1",
+                      "2"="rank-2")) %>%
+  group_by(Model,TauSNR,Grid,Scenario,Method) %>%
+  summarise_if(is.numeric,c("mean","sd","length")) %>%
+  ggplot(aes(x=Grid,y=FuncV_mean,group=interaction(Method,Scenario),color=Method)) +
+  geom_line(aes(linetype=Scenario)) +
+  geom_errorbar(aes(ymin=FuncV_mean-2*(FuncV_sd/sqrt(FuncV_length)),ymax=FuncV_mean+2*(FuncV_sd/sqrt(FuncV_length)),linetype=Scenario),
+                position=position_dodge(0)) +
+  facet_grid(rows = vars(Model),cols = vars(TauSNR),scales = "free_y",labeller = label_parsed)+
+  xlab(expression("Number of observations ("*m[i]*")")) +
+  ylab(expression("Coefficient of determination, "*R^2*", for "*Y[ij]^b)) +
+  theme(legend.title = element_blank(),
+        legend.position = "top",legend.background = element_rect(fill = "transparent"),legend.direction = "horizontal",legend.box = "horizontal")+
+  scale_color_manual(values=c("#F8766D","#619CFF")) +
+  scale_linetype_manual(values=c(1,2),labels=c(expression(bold(beta)[k]!=0),expression(bold(beta)[k]==0)))
+ggsave(filename = "r12susp_errbr_r2tensor_gd.pdf",height = 5,width=8,unit="in")
+```
+
+
+
+
+# Prediction Error
+
+## Rank-1 model
+
+```{r}
+#| echo: false
+Res2g3<-read.csv(paste(dirP,fname[7],sep = ""))
+#Res2g3us<-read.csv(paste(dirP,fname[17],sep = ""))
+```
+
+```{r}
+#| echo: false
+Res2g3 %>%
+  mutate(SNR=ifelse(Sig2E1==1,"SNR1",ifelse(Sig2E1==2,"SNR2","SNR3"))) %>%
+  dplyr::select(Tau,n,SNR,TftsvdTR,TsubTR,TmeanTR) %>%
+  set_names("Tau","n","SNR","ftsvdTR","subTR","meanTR") %>%
+  group_by(Tau,n,SNR) %>%
+  summarise_all(mean) %>%
+  ungroup() %>%
+  pivot_wider(id_cols = c("Tau","n"),
+              names_from = "SNR",
+              values_from = c("ftsvdTR","subTR","meanTR")) %>%
+  dplyr::select(Tau,n,ftsvdTR_SNR1,subTR_SNR1,meanTR_SNR1,ftsvdTR_SNR2,subTR_SNR2,meanTR_SNR2,ftsvdTR_SNR3,subTR_SNR3,meanTR_SNR3) %>%
+  mutate(Tau=replace(Tau,duplicated(Tau),"")) %>%
+    kableExtra::kbl(col.names = c("$\\sigma^2$","n",rep(c("FTSVD","SupFTSVD","SupFTSVD$_{\\boldsymbol{\\beta}}$"),3)),caption="Square root of mean squared prediction error in test data for FTSVD and SupFTSVD based on a rank-1 model.",escape = FALSE,booktabs = TRUE,linesep = "",digits = 4) %>%
+    kableExtra::kable_classic_2() %>%
+  kableExtra::add_header_above(header = c("","","$SNR_1$"=3,"$SNR_2$"=3,"$SNR_3$"=3),escape=FALSE)
+```
+
+```{r}
+#| echo: false
+Res2g3 %>%
+  mutate(SNR=ifelse(Sig2E1==1,"SNR1",ifelse(Sig2E1==2,"SNR2","SNR3"))) %>%
+  dplyr::select(Tau,n,SNR,TftsvdTR,TsubTR,TmeanTR) %>%
+  set_names("Tau","n","SNR","ftsvdTR","subTR","meanTR") %>%
+  group_by(Tau,n,SNR) %>%
+  summarise_all(mean) %>%
+  ungroup() %>%
+  pivot_wider(id_cols = c("Tau","n"),
+              names_from = "SNR",
+              values_from = c("ftsvdTR","meanTR")) %>%
+  dplyr::select(Tau,n,ftsvdTR_SNR1,meanTR_SNR1,ftsvdTR_SNR2,meanTR_SNR2,ftsvdTR_SNR3,meanTR_SNR3)
+```
+
+```{r}
+Res2g3 %>%
+   mutate(SNR=ifelse(Sig2E1==1,"SNR1",ifelse(Sig2E1==2,"SNR2","SNR3"))) %>%
+  dplyr::select(Tau,n,SNR,TftsvdTR,TsubTR,TmeanTR) %>%
+  set_names("Tau","n","SNR","ftsvdTR","subTR","meanTR") %>%
+   group_by(Tau,n,SNR) %>%
+   summarise_all(mean) %>%
+   ungroup() %>%
+   pivot_wider(id_cols = c("Tau","n"),
+               names_from = "SNR",
+               values_from = c("ftsvdTR","subTR")) %>%
+   dplyr::select(Tau,n,ftsvdTR_SNR1,subTR_SNR1,ftsvdTR_SNR2,subTR_SNR2,ftsvdTR_SNR3,subTR_SNR3) %>% mutate(Tau=replace(Tau,duplicated(Tau),"")) %>%
+    kableExtra::kbl(col.names = c("$\\sigma^2$","n",rep(c("FTSVD","SupFTSVD"),3)),caption="Square root of mean squared prediction error in test data for FTSVD and SupFTSVD based on a rank-1 model.",escape = FALSE,booktabs = TRUE,linesep = "",digits = 4) %>%
+    kableExtra::kable_classic_2() %>%
+  kableExtra::add_header_above(header = c("","","$SNR_1$"=2,"$SNR_2$"=2,"$SNR_3$"=2),escape=FALSE)
+```
+
+```{r}
+Res2g3R2<-Res2g3 %>%
+   mutate(SNR=ifelse(Sig2E1==1,"SNR1",ifelse(Sig2E1==2,"SNR2","SNR3"))) %>%
+  dplyr::select(Tau,n,SNR,TftsvdTR,TsubTR,TmeanTR) %>%
+  set_names("Tau","n","SNR","ftsvdTR","subTR","meanTR") %>%
+   group_by(Tau,n,SNR) %>%
+   summarise_all(mean) %>%
+   ungroup() %>%
+   pivot_wider(id_cols = c("Tau","n"),
+               names_from = "SNR",
+               values_from = c("ftsvdTR","subTR")) %>%
+   dplyr::select(Tau,n,ftsvdTR_SNR1,subTR_SNR1,ftsvdTR_SNR2,subTR_SNR2,ftsvdTR_SNR3,subTR_SNR3) %>%
+  mutate(r=1)
+```
+
+
+```{r}
+peR1<-Res2g3 %>%
+   mutate(SNR=ifelse(Sig2E1==1,"paste(SNR[1])",ifelse(Sig2E1==2,"paste(SNR[2])","paste(SNR[3])"))) %>%
+  dplyr::select(Tau,n,SNR,TftsvdTR,TsubTR,TmeanTR) %>%
+  set_names("Tau","n","SNR","ftsvdTR","subTR","meanTR") %>%
+  mutate(r="rank-1")
+```
+
+
+
+
+## Rank-2 model
+
+```{r}
+#| echo: false
+Res3g3<-read.csv(paste(dirP,fname[8],sep = ""))
+#Res3g3us<-read.csv(paste(dirP,fname[18],sep = ""))
+```
+
+```{r}
+Res2g3 %>%
+#  add_case(Res2g3us) %>%
+  add_case(Res3g3) %>%
+#  add_case(Res3g3us) %>%
+  mutate(Model=rep(c("rank-1","rank-2"),c(nrow(Res2g3)+nrow(Res2g3us),nrow(Res3g3)+nrow(Res3g3us))),
+         Scenario=rep(c("Sup","USup","Sup","USup"),c(nrow(Res2g3),nrow(Res2g3us),nrow(Res3g3),nrow(Res3g3us))),
+         SNR=ifelse(Sig2E1==1,"paste(SNR[1])",ifelse(Sig2E1==2,"paste(SNR[2])","paste(SNR[3])"))) %>%
+  dplyr::select(Model,Tau,n,SNR,TftsvdTR,TsubTR,Scenario) %>%
+  set_names("Model","Tau","n","SNR","FTSVD","SupFTSVD","Scenario") %>%
+  mutate(ModelTau=paste("paste(sigma^2==",Tau,"~","(r==",Model,"))",sep=""))%>%
+  mutate(TauSNR=paste("paste(sigma^2==",Tau,"~","(",SNR,"))",sep="")) %>%
+  pivot_longer(cols=c("FTSVD","SupFTSVD"),names_to = "Method",values_to = "FuncV") %>%
+  group_by(Model,TauSNR,n,Method,Scenario) %>%
+  summarise_if(is.numeric,c("mean","sd","length")) %>%
+  ggplot(aes(x=n,y=FuncV_mean,group=interaction(Method,Scenario),color=Method)) +
+  geom_line(aes(linetype=Scenario)) +
+  geom_errorbar(aes(ymin=FuncV_mean-2*(FuncV_sd/sqrt(FuncV_length)),ymax=FuncV_mean+2*(FuncV_sd/sqrt(FuncV_length))),
+                position=position_dodge(5)) +
+  facet_grid(rows = vars(Model),cols = vars(TauSNR),scales = "free_y",labeller = label_parsed)+
+  xlab(expression("Number of subjects (n)")) +
+  ylab(expression(sqrt(MSPE*"("*hat(bold(Y))[ij]*")"))) +
+  theme(legend.title = element_blank(),
+        legend.position = "top",legend.background = element_rect(fill = "transparent"),legend.direction = "horizontal",legend.box = "horizontal")+
+  scale_color_manual(values=c("#F8766D","#619CFF")) 
+ggsave(filename = "r12_pred_err.pdf",height = 5,width=8,unit="in")
+```
+
+
+
+```{r}
+Res3g3us %>%
+   mutate(SNR=ifelse(Sig2E1==1,"SNR1",ifelse(Sig2E1==2,"SNR2","SNR3"))) %>%
+  dplyr::select(Tau,n,SNR,TftsvdTR,TsubTR,TmeanTR) %>%
+  set_names("Tau","n","SNR","ftsvdTR","subTR","meanTR") %>%
+   group_by(Tau,n,SNR) %>%
+   summarise_all(mean) %>%
+   ungroup() %>%
+   pivot_wider(id_cols = c("Tau","n"),
+               names_from = "SNR",
+               values_from = c("ftsvdTR","subTR")) %>%
+   dplyr::select(Tau,n,ftsvdTR_SNR1,subTR_SNR1,ftsvdTR_SNR2,subTR_SNR2,ftsvdTR_SNR3,subTR_SNR3) %>% mutate(Tau=replace(Tau,duplicated(Tau),"")) %>%
+    kableExtra::kbl(col.names = c("$\\sigma^2$","n",rep(c("FTSVD","SupFTSVD"),3)),caption="Square root of mean squared prediction error in test data for FTSVD and SupFTSVD based on a rank-1 model.",escape = FALSE,booktabs = TRUE,linesep = "",digits = 4) %>%
+    kableExtra::kable_classic_2() %>%
+  kableExtra::add_header_above(header = c("","","$SNR_1$"=2,"$SNR_2$"=2,"$SNR_3$"=2),escape=FALSE)
+```
+```{r}
+Res3g3 %>%
+  mutate(SNR=ifelse(Sig2E1==1,"SNR1",ifelse(Sig2E1==2,"SNR2","SNR3"))) %>%
+  dplyr::select(Tau,n,SNR,TftsvdTR,TsubTR,TmeanTR) %>%
+  set_names("Tau","n","SNR","ftsvdTR","subTR","meanTR") %>%
+  group_by(Tau,n,SNR) %>%
+  summarise_all(mean) %>%
+  ungroup() %>%
+  pivot_wider(id_cols = c("Tau","n"),
+              names_from = "SNR",
+              values_from = c("ftsvdTR","subTR")) %>%
+  mutate(r=2) %>%
+  dplyr::select(Tau,r,n,ftsvdTR_SNR1,subTR_SNR1,ftsvdTR_SNR2,subTR_SNR2,ftsvdTR_SNR3,subTR_SNR3) %>%
+  add_case(Res2g3R2) %>%
+  arrange(Tau,r) %>%
+  group_by(Tau,r) %>%
+  mutate(r=replace(r,duplicated(r),"")) %>%
+  ungroup() %>%
+  group_by(Tau) %>%
+  mutate(Tau=replace(Tau,duplicated(Tau),"")) %>%  
+  ungroup() %>%
+  kableExtra::kbl(col.names = c("$\\sigma^2$","Rank","n",rep(c("FTSVD","SupFTSVD"),3)),caption="Square root of the mean squared prediction error of $\\widehat{Y}_i(t)$ based on test data for FTSVD and SupFTSVD.",escape = FALSE,booktabs = TRUE,linesep = "",digits =3) %>%
+    kableExtra::kable_classic_2() %>%
+  kableExtra::add_header_above(header = c("","","","$SNR_1$"=2,"$SNR_2$"=2,"$SNR_3$"=2),escape=FALSE) 
+
+#%>%
+#  kableExtra::pack_rows(group_label ="rank-1 model",start_row = 1,end_row = 8,latex_align = "l",hline_before = T,hline_after = T) %>%
+#  kableExtra::pack_rows(group_label ="rank-2 model",start_row = 9,end_row = 16,latex_align = "l",hline_before = T,hline_after = T)
+```
+
+```{r}
+Res3g3 %>%
+  mutate(SNR=ifelse(Sig2E1==1,"SNR1",ifelse(Sig2E1==2,"SNR2","SNR3"))) %>%
+  dplyr::select(Tau,n,SNR,TftsvdTR,TsubTR,TmeanTR) %>%
+  set_names("Tau","n","SNR","ftsvdTR","subTR","meanTR") %>%
+  group_by(Tau,n,SNR) %>%
+  summarise_all(mean) %>%
+  ungroup() %>%
+  pivot_wider(id_cols = c("Tau","n"),
+              names_from = "SNR",
+              values_from = c("ftsvdTR","subTR")) %>%
+  mutate(r=2) %>%
+  dplyr::select(Tau,r,n,ftsvdTR_SNR1,subTR_SNR1,ftsvdTR_SNR2,subTR_SNR2,ftsvdTR_SNR3,subTR_SNR3) %>%
+  add_case(Res2g3R2) %>%
+  arrange(Tau,r) %>%
+  group_by(Tau,r) %>%
+  mutate(r=replace(r,duplicated(r),"")) %>%
+  ungroup() %>%
+  group_by(Tau) %>%
+  mutate(Tau=replace(Tau,duplicated(Tau),"")) %>%  
+  ungroup() %>%
+  dplyr::select(-r) %>%
+  kableExtra::kbl(col.names = c("$\\sigma^2$","n",rep(c("FTSVD","SupFTSVD"),3)),caption="Square root of the mean squared prediction error of $\\widehat{Y}_i(t)$ based on test data for FTSVD and SupFTSVD.",escape = FALSE,booktabs = TRUE,linesep = "",digits =3,format="latex") %>%
+    kableExtra::kable_classic_2() %>%
+  kableExtra::add_header_above(header = c("","","$SNR_1$"=2,"$SNR_2$"=2,"$SNR_3$"=2),escape=FALSE) %>%
+  kableExtra::pack_rows(group_label ="rank-1 model",start_row = 1,end_row = 8,latex_align = "l",hline_before = T,hline_after = T) %>%
+  kableExtra::pack_rows(group_label ="rank-2 model",start_row = 9,end_row = 16,latex_align = "l",hline_before = T,hline_after = T)
+```
+```{r}
+#| eval: false
+Res3g3 %>%
+   mutate(SNR=ifelse(Sig2E1==1,"SNR1",ifelse(Sig2E1==2,"SNR2","SNR3"))) %>%
+  dplyr::select(Tau,n,SNR,TftsvdTR,TsubTR,TmeanTR) %>%
+  set_names("Tau","n","SNR","ftsvdTR","subTR","meanTR") %>%
+   group_by(Tau,n,SNR) %>%
+   summarise_all(mean) %>%
+   ungroup() %>%
+   pivot_wider(id_cols = c("Tau","n"),
+               names_from = "SNR",
+               values_from = c("ftsvdTR","subTR")) %>%
+   dplyr::select(Tau,n,ftsvdTR_SNR1,subTR_SNR1,ftsvdTR_SNR2,subTR_SNR2,ftsvdTR_SNR3,subTR_SNR3) %>%
+  mutate(r=2) %>%
+  add_case(Res2g3R2) %>%
+  pivot_longer(contains("_"),names_to = c("Var",".value"),
+               names_sep = "_") %>%
+  pivot_longer(c("SNR1","SNR2","SNR3"),names_to = "SNR",values_to = "FuncV") %>%
+  mutate(Method=recode(Var,
+                       "ftsvdTR"="FTSVD",
+                       "subTR"="SupFTSVD")) %>%
+ggplot(aes(x=n,y=FuncV,group=interaction(r,Method),color=Method)) +
+  geom_line(aes(linetype=factor(r))) +
+  facet_grid(rows = vars(Tau),cols = vars(SNR),scales = "free_y",labeller = label_parsed)+
+  xlab(expression("Number of subjects (n)")) +
+  ylab(expression(sqrt("MSE("*bold(x)[i]^{T}*hat(bold(beta))[k]-bold(x)[i]^{T}*bold(beta)[k]*")"))) +
+  theme(legend.title = element_blank(),
+        legend.position = "top",legend.background = element_rect(fill = "transparent"))
+ggsave("pe_r1r2.pdf",height = 4,width = 8,units="in")  
+```
+
+```{r}
+Res3g3 %>%
+   mutate(SNR=ifelse(Sig2E1==1,"paste(SNR[1])",ifelse(Sig2E1==2,"paste(SNR[2])","paste(SNR[3])"))) %>%
+  dplyr::select(Tau,n,SNR,TftsvdTR,TsubTR,TmeanTR) %>%
+  set_names("Tau","n","SNR","ftsvdTR","subTR","meanTR") %>%
+  mutate(r="rank-2") %>%
+  add_case(peR1) %>%
+  pivot_longer(c("ftsvdTR","subTR"),names_to = "Method",values_to = "FuncV") %>%
+  mutate(Method=recode(Method,
+         "ftsvdTR"="FTSVD",
+         "subTR"="SupFTSVD")) %>%
+  mutate(SamT=factor(ifelse(Tau==1,"paste(sigma^2==1)","paste(sigma^2==4)"),
+                   levels=c("paste(sigma^2==1)","paste(sigma^2==4)"))) %>%
+  ggplot(aes(x=as.factor(n),y=FuncV,group=interaction(as.factor(n),Method),color=Method)) +
+  geom_boxplot() +
+  facet_grid(rows = vars(SamT),cols = vars(SNR),scales = "free_y",labeller = label_parsed)+
+  xlab(expression("Number of subjects (n)")) +
+  #ylab(expression(sqrt("MSPE("*hat(zeta)[ik]*")"))) +
+  theme(legend.title = element_blank(),
+        legend.position = "top",legend.background = element_rect(fill = "transparent"))
+```
+
+```{r}
+Res3g3 %>%
+  add_case(Res2g3) %>%
+  mutate(SNR=ifelse(Sig2E1==1,"SNR1",ifelse(Sig2E1==2,"SNR2","SNR3")),
+         Model=rep(c("rank-1","rank-2"),c(nrow(Res3g3),nrow(Res2g3)))) %>%
+  dplyr::select(Model,Tau,n,SNR,TftsvdTR,TsubTR) %>%
+  set_names("Model","Tau","n","SNR","FTSVD","SupFTSVD") %>%
+  group_by(Model,Tau,n,SNR) %>%
+  summarise_all(c("sd","length"))
+```
+
+
+
+```{r}
+Res3g3 %>%
+  add_case(Res2g3) %>%
+  mutate(SNR=ifelse(Sig2E1==1,"$SNR_1$",ifelse(Sig2E1==2,"$SNR_2$","$SNR_3$")),
+         Model=rep(c("rank-1","rank-2"),c(nrow(Res3g3),nrow(Res2g3)))) %>%
+  dplyr::select(Model,Tau,n,SNR,TftsvdTR,TsubTR) %>%
+  set_names("Model","Tau","n","SNR","FTSVD","SupFTSVD") %>%
+  pivot_longer(c("FTSVD","SupFTSVD"),names_to = "Method",values_to = "FuncV") %>%
+  group_by(Model,Tau,n,SNR,Method) %>%
+  summarise_all(c("mean","sd","length")) %>%
+  ungroup() %>%
+  mutate(Serr=sd/sqrt(length)) %>%
+  mutate(PeV=paste(formatC(round(mean,2),digits=2,format="f"),"(",formatC(round(Serr,3),digits=3,format="f"),")",sep="")) %>%
+  pivot_wider(id_cols = c("SNR","n"),
+              names_from = c("Method","Model","Tau"),
+              values_from = c("PeV")) %>%
+  arrange(SNR,n) %>%
+  mutate(SNR=c("$SNR_1$",rep("",3),"$SNR_2$",rep("",3),"$SNR_3$",rep("",3))) %>%
+  kableExtra::kbl(col.names = c("SNR","n",rep(c("FTSVD","SupFTSVD"),4)),caption="Square root of the mean squared prediction error of $\\widehat{Y}_i(t)$ based on test data for FTSVD and SupFTSVD.",escape = FALSE,booktabs = TRUE,linesep = "",digits =3,format="latex") %>%
+    kableExtra::kable_classic_2() %>%
+  kableExtra::add_header_above(header = c("","","$\\\\sigma^2=1$"=2,"$\\\\sigma^2=4$"=2,"$\\\\sigma^2=1$"=2,"$\\\\sigma^2=4$"=2),escape=FALSE) %>%
+  kableExtra::add_header_above(header = c("","","rank-1"=4,"rank-2"=4),escape=FALSE) %>%
+  kableExtra::kable_styling(latex_options = "scale_down")
+```
+
+```{r}
+se_dat<-Res3g3 %>%
+  add_case(Res2g3) %>%
+  mutate(SNR=ifelse(Sig2E1==1,"$SNR_1$",ifelse(Sig2E1==2,"$SNR_2$","$SNR_3$")),
+         Model=rep(c("rank-1","rank-2"),c(nrow(Res3g3),nrow(Res2g3)))) %>%
+  dplyr::select(Model,Tau,n,SNR,TftsvdTR,TsubTR) %>%
+  set_names("Model","Tau","n","SNR","FTSVD","SupFTSVD") %>%
+  pivot_longer(c("FTSVD","SupFTSVD"),names_to = "Method",values_to = "FuncV") %>%
+  group_by(Model,Tau,n,SNR,Method) %>%
+  summarise_all(c("sd","length")) %>%
+  mutate(SEval=sd/sqrt(length)) %>%
+  ungroup() %>%
+  pivot_wider(id_cols = c("SNR","n","Model","Tau"),
+              names_from = c("Method"),
+              values_from = c("SEval"))
+```
+
+```{r}
+Res3g3 %>%
+  add_case(Res2g3) %>%
+  mutate(SNR=ifelse(Sig2E1==1,"$SNR_1$",ifelse(Sig2E1==2,"$SNR_2$","$SNR_3$")),
+         Model=rep(c("rank-2","rank-1"),c(nrow(Res3g3),nrow(Res2g3)))) %>%
+  dplyr::select(Model,Tau,n,SNR,TftsvdTR,TsubTR) %>%
+  set_names("Model","Tau","n","SNR","FTSVD","SupFTSVD") %>%
+  pivot_longer(c("FTSVD","SupFTSVD"),names_to = "Method",values_to = "FuncV") %>%
+  group_by(Model,Tau,n,SNR,Method) %>%
+  summarise_all(c("mean")) %>%
+  ungroup() %>%
+  mutate(PeV=formatC(round(FuncV,2),digits=2,format="f")) %>%
+  pivot_wider(id_cols = c("SNR","n"),
+              names_from = c("Method","Model","Tau"),
+              values_from = c("PeV")) %>%
+  arrange(SNR,n) %>%
+  mutate(SNR=c("$SNR_1$",rep("",3),"$SNR_2$",rep("",3),"$SNR_3$",rep("",3))) %>%
+  kableExtra::kbl(col.names = c("SNR","n",rep(c("FTSVD","SupFTSVD"),4)),caption="Square root of the mean squared prediction error of $\\widehat{Y}_i(t)$ based on test data for FTSVD and SupFTSVD.",escape = FALSE,booktabs = TRUE,linesep = "",align = "c",label="pe_err") %>%
+    kableExtra::kable_classic_2() %>%
+  kableExtra::add_header_above(header = c("","","$\\\\sigma^2=1$"=2,"$\\\\sigma^2=4$"=2,"$\\\\sigma^2=1$"=2,"$\\\\sigma^2=4$"=2),escape=FALSE) %>%
+  kableExtra::add_header_above(header = c("","","rank-1"=4,"rank-2"=4),escape=FALSE) %>%
+  kableExtra::add_footnote(paste("Maximum standard errors are ",formatC(max(se_dat$FTSVD),digits=3,format="f"), " and ",formatC(max(se_dat$SupFTSVD),digits=3,format="f"), " for FTSVD and SupFTSVD, respectively.",sep=""),notation = "none") %>%
+  kableExtra::kable_styling(latex_options = "scale_down")
+```
+
+
+
+# Trend over sample size: when $p=300$
+
+## Rank-1 model
+
+```{r}
+#| echo: false
+Res2g3<-read.csv(paste(dirP,fname[1],sep = ""))
+```
+
+```{r}
+#| echo: false
+resG<-Res2g3 %>%
+  mutate(SNR=ifelse(Sig2E==1,"paste(SNR[1])",ifelse(Sig2E==2,"paste(SNR[2])","paste(SNR[3])"))) %>%
+  dplyr::select(Tau,n,comp,Grid,SNR,Tau,FTSVD1MP,bFTSVD1,xiFTSVD1,SupFTSVD1CM,bSupFTSVD1,xiSupFTSVD1,FTSVD1,SupFTSVD1,Cov2R,SupCov2R,AR2_FTSVD1,AR2_SupFTSVD1) %>%
+  set_names("Tau","n","Comp","Grid","SNR","a_FTSVD","b_FTSVD","c_FTSVD","a_SupFTSVD","b_SupFTSVD","c_SupFTSVD","d_FTSVD","d_SupFTSVD","e_FTSVD","e_SupFTSVD","f_FTSVD","f_SupFTSVD") %>%
+  pivot_longer(cols = ends_with("FTSVD"),names_to = c("Var",".value"),
+               names_sep = "_")
+```
+
+```{r}
+#| echo: false
+resG %>% 
+  pivot_longer(cols=c("FTSVD","SupFTSVD"),values_to = "FuncV",names_to = "Method") %>%
+  filter(Var=="a") %>%
+  mutate(SamT=factor(ifelse(Tau==1,"paste(sigma^2==1)","paste(sigma^2==4)"),
+                   levels=c("paste(sigma^2==1)","paste(sigma^2==4)"))) %>%
+  ggplot(aes(x=as.factor(n),y=FuncV,group=interaction(as.factor(n),Method),color=Method)) +
+  geom_boxplot() +
+  facet_grid(rows = vars(SamT),cols = vars(SNR),scales = "free_y",labeller = label_parsed)+
+  xlab(expression("Number of subjects (n)")) +
+  ylab(expression(sqrt("MSE("*bold(x)[i]^{T}*hat(bold(beta))[k]-bold(x)[i]^{T}*bold(beta)[k]*")"))) +
+  theme(legend.title = element_blank(),
+        legend.position = "top",legend.background = element_rect(fill = "transparent"))
+ggsave("subj_loadingR1mean.pdf",height = 4,width = 8,units="in")
+```
+
+```{r}
+#| echo: false
+resG %>% 
+  pivot_longer(cols=c("FTSVD","SupFTSVD"),values_to = "FuncV",names_to = "Method") %>%
+  filter(Var=="b") %>%
+  mutate(SamT=factor(ifelse(Tau==1,"paste(sigma^2==1)","paste(sigma^2==4)"),
+                   levels=c("paste(sigma^2==1)","paste(sigma^2==4)"))) %>%
+  ggplot(aes(x=as.factor(n),y=FuncV,group=interaction(as.factor(n),Method),color=Method)) +
+  geom_boxplot() +
+  facet_grid(rows = vars(SamT),cols = vars(SNR),scales = "free_y",labeller = label_parsed)+
+  xlab(expression("Number of subjects (n)")) +
+  ylab(expression("||"*bold(xi)[k]-hat(bold(xi))[k]*"||"[2])) +
+  theme(legend.title = element_blank(),
+        legend.position = "top",legend.background = element_rect(fill = "transparent"))
+ggsave("feat_loadingR1.pdf",height = 4,width = 8,units="in")
+```
+
+
+```{r}
+#| echo: false
+resG %>% 
+  pivot_longer(cols=c("FTSVD","SupFTSVD"),values_to = "FuncV",names_to = "Method") %>%
+  filter(Var=="c") %>%
+  mutate(SamT=factor(ifelse(Tau==1,"paste(sigma^2==1)","paste(sigma^2==4)"),
+                   levels=c("paste(sigma^2==1)","paste(sigma^2==4)"))) %>%
+  ggplot(aes(x=as.factor(n),y=sqrt(FuncV),group=interaction(as.factor(n),Method),color=Method)) +
+  geom_boxplot() +
+  facet_grid(rows = vars(SamT),cols = vars(SNR),scales = "free_y",labeller = label_parsed)+
+  xlab(expression("Number of subjects (n)")) +
+  ylab(expression(sqrt(integral("{"*psi[k](t)-hat(psi[k])(t)*"}"^2*dt,t,"")))) +
+  theme(legend.title = element_blank(),
+        legend.position = "top",legend.background = element_rect(fill = "transparent"))
+ggsave("singF_loadingR1.pdf",height = 4,width = 8,units="in")
+```
+```{r}
+#| echo: false
+resG %>% 
+  pivot_longer(cols=c("FTSVD","SupFTSVD"),values_to = "FuncV",names_to = "Method") %>%
+  filter(Var=="d") %>%
+  mutate(SamT=factor(ifelse(Tau==1,"paste(sigma^2==1)","paste(sigma^2==4)"),
+                   levels=c("paste(sigma^2==1)","paste(sigma^2==4)"))) %>%
+  ggplot(aes(x=as.factor(n),y=FuncV,group=interaction(as.factor(n),Method),color=Method)) +
+  geom_boxplot() +
+  facet_grid(rows = vars(SamT),cols = vars(SNR),scales = "free_y",labeller = label_parsed)+
+  xlab(expression("Number of subjects (n)")) +
+  ylab(expression(sqrt("MSPE("*hat(zeta)[ik]*")"))) +
+  theme(legend.title = element_blank(),
+        legend.position = "top",legend.background = element_rect(fill = "transparent"))
+ggsave("subj_loadingR1.pdf",height = 4,width = 8,units="in")
+```
+
+```{r}
+#| echo: false
+resG %>% 
+  filter(Var=="e") %>%
+  mutate(FuncV=(SupFTSVD-FTSVD)/FTSVD) %>%
+  mutate(SamT=factor(ifelse(Tau==1,"paste(sigma^2==1)","paste(sigma^2==4)"),
+                   levels=c("paste(sigma^2==1)","paste(sigma^2==4)"))) %>%
+  ggplot(aes(x=as.factor(n),y=FuncV,group=as.factor(n))) +
+  geom_boxplot() +
+  geom_hline(aes(yintercept = 0),linetype="dashed",color="brown4") +
+  facet_grid(rows = vars(SamT),cols = vars(SNR),scales = "free_y",labeller = label_parsed)+
+  xlab(expression("Number of subjects (n)")) +
+  ylab(expression("Relative change in "*R^2)) +
+  theme(legend.title = element_blank(),
+        legend.position = "top")
+ggsave("rchangeR2_R1.pdf",height = 4,width = 8,units="in")
+```
+
+
+```{r}
+#| echo: false
+Res2<-Res2g3 %>%
+  mutate(SNR=ifelse(Sig2E==1,1,ifelse(Sig2E==2,2,3))) %>%
+  mutate(xiFTSVD1=sqrt(xiFTSVD1),
+         xiSupFTSVD1=sqrt(xiSupFTSVD1)) %>%
+  group_by(Tau,n,comp,Grid,SNR) %>%
+  summarise_if(is.numeric,mean) %>%
+  ungroup() %>%
+  dplyr::select(Tau,n,comp,Grid,SNR,Tau,FTSVD1MP,bFTSVD1,xiFTSVD1,SupFTSVD1CM,bSupFTSVD1,xiSupFTSVD1,FTSVD1,SupFTSVD1,Cov2R,SupCov2R,AR2_FTSVD1,AR2_SupFTSVD1) %>%
+  set_names("Tau","n","Comp","Grid","SNR","a_FTSVD","b_FTSVD","c_FTSVD","a_SupFTSVD","b_SupFTSVD","c_SupFTSVD","d_FTSVD","d_SupFTSVD","e_FTSVD","e_SupFTSVD","f_FTSVD","f_SupFTSVD") %>%
+  pivot_longer(cols = ends_with("FTSVD"),names_to = c("Var",".value"),
+               names_sep = "_") %>%
+    pivot_wider(id_cols = c("Tau","n","Comp","Grid","Var"),
+              names_from = "SNR",
+              values_from = c("FTSVD","SupFTSVD")) %>%
+  arrange(Var)
+```
+
+```{r}
+Res2 %>%
+  filter(Var=="a") %>%
+  dplyr::select(Tau,n,FTSVD_1,SupFTSVD_1,FTSVD_2,SupFTSVD_2,FTSVD_3,SupFTSVD_3) %>%
+  group_by(Tau) %>%
+  mutate(Tau=replace(Tau,duplicated(Tau),"")) %>%
+  ungroup() %>%
+  kableExtra::kbl(col.names = c("$\\sigma^2$","n","FTSVD","SupFTSVD","FTSVD","SupFTSVD","FTSVD","SupFTSVD"),caption="Mean squared error of $\\mathbf{x}_i^T\\beta_k$ obtained by FTSVD and SupFTSVD for a rank-1 model.",escape = FALSE,booktabs = TRUE,linesep = "",digits = 3) %>%
+    kableExtra::kable_classic_2() %>%
+  kableExtra::add_header_above(header = c("","","$SNR_1$"=2,"$SNR_2$"=2,"$SNR_3$"=2),escape=FALSE)
+```
+
+```{r}
+Res2 %>%
+  filter(Var=="b") %>%
+  dplyr::select(Tau,n,FTSVD_1,SupFTSVD_1,FTSVD_2,SupFTSVD_2,FTSVD_3,SupFTSVD_3) %>%
+  group_by(Tau) %>%
+  mutate(Tau=replace(Tau,duplicated(Tau),"")) %>%
+  ungroup() %>%
+  kableExtra::kbl(col.names = c("$\\sigma^2$","n","FTSVD","SupFTSVD","FTSVD","SupFTSVD","FTSVD","SupFTSVD"),caption="Average distance between true and estimated feature loadings, $||\\widehat{\\mathbf{b}}-\\mathbf{b}||_2$, for FTSVD and SupFTSVD under a rank-1 model.",escape = FALSE,booktabs = TRUE,linesep = "",digits = 3) %>%
+    kableExtra::kable_classic_2() %>%
+  kableExtra::add_header_above(header = c("","","$SNR_1$"=2,"$SNR_2$"=2,"$SNR_3$"=2),escape=FALSE)
+```
+
+
+```{r}
+Res2 %>%
+  filter(Var=="c") %>%
+  dplyr::select(Tau,n,FTSVD_1,SupFTSVD_1,FTSVD_2,SupFTSVD_2,FTSVD_3,SupFTSVD_3) %>%
+  group_by(Tau) %>%
+  mutate(Tau=replace(Tau,duplicated(Tau),"")) %>%
+  ungroup() %>%
+  kableExtra::kbl(col.names = c("$\\sigma^2$","n","FTSVD","SupFTSVD","FTSVD","SupFTSVD","FTSVD","SupFTSVD"),caption="Square root of squared distance between true and estimated singular functions, $\\sqrt{\\int\\{\\widehat{\\xi}(t)-\\xi(t)\\}^2dt}$, for FTSVD and SupFTSVD under a rank-1 model.",escape = FALSE,booktabs = TRUE,linesep = "",digits = 5) %>%
+    kableExtra::kable_classic_2() %>%
+  kableExtra::add_header_above(header = c("","","$SNR_1$"=2,"$SNR_2$"=2,"$SNR_3$"=2),escape=FALSE)
+```
+
+
+```{r}
+Res2 %>%
+  filter(Var=="d") %>%
+  dplyr::select(Tau,n,FTSVD_1,SupFTSVD_1,FTSVD_2,SupFTSVD_2,FTSVD_3,SupFTSVD_3) %>%
+  group_by(Tau) %>%
+  mutate(Tau=replace(Tau,duplicated(Tau),"")) %>%
+  ungroup() %>%
+  kableExtra::kbl(col.names = c("$\\sigma^2$","n","FTSVD","SupFTSVD","FTSVD","SupFTSVD","FTSVD","SupFTSVD"),caption="Square root of mean-squared prediction error of $\\widehat{\\zeta}_{ik}$ obtained by FTSVD and SupFTSVD using a rank-1 model.",escape = FALSE,booktabs = TRUE,linesep = "",digits = 3) %>%
+    kableExtra::kable_classic_2() %>%
+  kableExtra::add_header_above(header = c("","","$SNR_1$"=2,"$SNR_2$"=2,"$SNR_3$"=2),escape=FALSE)
+```
+
+```{r}
+Res2R2<-Res2 %>%
+  filter(Var=="e") %>%
+  dplyr::select(Tau,n,FTSVD_1,SupFTSVD_1,FTSVD_2,SupFTSVD_2,FTSVD_3,SupFTSVD_3) %>%
+  group_by(Tau) %>%
+  mutate(Tau=replace(Tau,duplicated(Tau),"")) %>%
+  ungroup() %>%
+  mutate(r=1)
+```
+
+
+
+```{r}
+Res2 %>%
+  filter(Var=="e") %>%
+  dplyr::select(Tau,n,FTSVD_1,SupFTSVD_1,FTSVD_2,SupFTSVD_2,FTSVD_3,SupFTSVD_3) %>%
+  group_by(Tau) %>%
+  mutate(Tau=replace(Tau,duplicated(Tau),"")) %>%
+  ungroup() %>%
+  kableExtra::kbl(col.names = c("$\\sigma^2$","n","FTSVD","SupFTSVD","FTSVD","SupFTSVD","FTSVD","SupFTSVD"),caption="Coefficient of determination, $R^2$, in case of modeling the subject loading $\\zeta_{ik}$ (FTSVD performs separately, however, SupFTSVD performs it simultaneously).",escape = FALSE,booktabs = TRUE,linesep = "",digits = 3) %>%
+    kableExtra::kable_classic_2() %>%
+  kableExtra::add_header_above(header = c("","","$SNR_1$"=2,"$SNR_2$"=2,"$SNR_3$"=2),escape=FALSE)
+```
+
+```{r}
+Res2 %>%
+  filter(Var=="f") %>%
+  dplyr::select(Tau,n,FTSVD_1,SupFTSVD_1,FTSVD_2,SupFTSVD_2,FTSVD_3,SupFTSVD_3) %>%
+  group_by(Tau) %>%
+  mutate(Tau=replace(Tau,duplicated(Tau),"")) %>%
+  ungroup() %>%
+  kableExtra::kbl(col.names = c("$\\sigma^2$","n","FTSVD","SupFTSVD","FTSVD","SupFTSVD","FTSVD","SupFTSVD"),caption="Coefficient of determination, $R^2$, from a general linear regression using the fitted component as regressors.",escape = FALSE,booktabs = TRUE,linesep = "",digits = 3,format="latex",label="r2tensor") %>%
+    kableExtra::kable_classic_2() %>%
+  kableExtra::add_header_above(header = c("","","$SNR_1$"=2,"$SNR_2$"=2,"$SNR_3$"=2),escape=FALSE)
+```
+## Rank-2 model
+
+```{r}
+#| echo: false
+Res3g3<-read.csv(paste(dirP,fname[2],sep = ""))
+Res3<-Res3g3 %>%
+  mutate(SNR=ifelse(Sig2E==1|Sig2E==1.5,1,ifelse(Sig2E==2|Sig2E==2.25,2,3))) %>%
+  mutate(xiFTSVD1=sqrt(xiFTSVD1),
+         xiSupFTSVD1=sqrt(xiSupFTSVD1)) %>%
+  group_by(Tau,n,comp,Grid,SNR) %>%
+  summarise_if(is.numeric,mean) %>%
+  ungroup() %>%
+  dplyr::select(Tau,n,comp,Grid,SNR,Tau,FTSVD1MP,bFTSVD1,xiFTSVD1,SupFTSVD1CM,bSupFTSVD1,xiSupFTSVD1,FTSVD1,SupFTSVD1,Cov2R,SupCov2R,AR2_FTSVD1,AR2_SupFTSVD1) %>%
+  set_names("Tau","n","Comp","Grid","SNR","a_FTSVD","b_FTSVD","c_FTSVD","a_SupFTSVD","b_SupFTSVD","c_SupFTSVD","d_FTSVD","d_SupFTSVD","e_FTSVD","e_SupFTSVD","f_FTSVD","f_SupFTSVD") %>%
+  pivot_longer(cols = ends_with("FTSVD"),names_to = c("Var",".value"),
+               names_sep = "_") %>%
+    pivot_wider(id_cols = c("Tau","n","Comp","Grid","Var"),
+              names_from = "SNR",
+              values_from = c("FTSVD","SupFTSVD")) %>%
+  arrange(Var)
+```
+
+```{r}
+Res3 %>%
+  filter(Var=="a") %>%
+  dplyr::select(Tau,Comp,n,FTSVD_1,SupFTSVD_1,FTSVD_2,SupFTSVD_2,FTSVD_3,SupFTSVD_3) %>%
+  group_by(Tau,n) %>%
+  arrange(Tau,Comp) %>%
+  ungroup() %>%
+  group_by(Tau,Comp) %>%
+  mutate(n=replace(n,duplicated(n),""))%>%
+  ungroup() %>%
+  group_by(Tau,Comp) %>%
+  mutate(Comp=replace(Comp,duplicated(Comp),"")) %>%
+  ungroup() %>%
+  group_by(Tau) %>%
+  mutate(Tau=replace(Tau,duplicated(Tau),"")) %>%
+  ungroup() %>%
+  kableExtra::kbl(col.names = c("$\\sigma^2$","k","n","FTSVD","SupFTSVD","FTSVD","SupFTSVD","FTSVD","SupFTSVD"),caption="Mean squared error of $\\mathbf{x}_i^T\\boldsymbol{\\beta}_k$ obtained by FTSVD and SupFTSVD for a rank-2 model.",escape = FALSE,booktabs = TRUE,linesep = "",digits = 3) %>%
+    kableExtra::kable_classic_2() %>%
+  kableExtra::add_header_above(header = c("","","","$SNR_1$"=2,"$SNR_2$"=2,"$SNR_3$"=2),escape=FALSE)
+```
+
+```{r}
+Res3 %>%
+  filter(Var=="b") %>%
+  dplyr::select(Tau,Comp,n,FTSVD_1,SupFTSVD_1,FTSVD_2,SupFTSVD_2,FTSVD_3,SupFTSVD_3) %>%
+  group_by(Tau,n) %>%
+  arrange(Tau,Comp) %>%
+  ungroup() %>%
+  group_by(Tau,Comp) %>%
+  mutate(n=replace(n,duplicated(n),""))%>%
+  ungroup() %>%
+  group_by(Tau,Comp) %>%
+  mutate(Comp=replace(Comp,duplicated(Comp),"")) %>%
+  ungroup() %>%
+  group_by(Tau) %>%
+  mutate(Tau=replace(Tau,duplicated(Tau),"")) %>%
+  kableExtra::kbl(col.names = c("$\\sigma^2$","k","n","FTSVD","SupFTSVD","FTSVD","SupFTSVD","FTSVD","SupFTSVD"),caption="Average distance between true and estimated feature loadings, $||\\widehat{\\mathbf{b}}-\\mathbf{b}||_2$, for FTSVD and SupFTSVD under a rank-2 model.",escape = FALSE,booktabs = TRUE,linesep = "",digits = 3) %>%
+    kableExtra::kable_classic_2() %>%
+  kableExtra::add_header_above(header = c("","","","$SNR_1$"=2,"$SNR_2$"=2,"$SNR_3$"=2),escape=FALSE)
+```
+
+```{r}
+Res3 %>%
+  filter(Var=="c") %>%
+  dplyr::select(Tau,Comp,n,FTSVD_1,SupFTSVD_1,FTSVD_2,SupFTSVD_2,FTSVD_3,SupFTSVD_3) %>%
+  group_by(Tau,n) %>%
+  arrange(Tau,Comp) %>%
+  ungroup() %>%
+  group_by(Tau,Comp) %>%
+  mutate(n=replace(n,duplicated(n),""))%>%
+  ungroup() %>%
+  group_by(Tau,Comp) %>%
+  mutate(Comp=replace(Comp,duplicated(Comp),"")) %>%
+  ungroup() %>%
+  group_by(Tau) %>%
+  mutate(Tau=replace(Tau,duplicated(Tau),"")) %>%  ungroup() %>%
+  kableExtra::kbl(col.names = c("$\\sigma^2$","k","n","FTSVD","SupFTSVD","FTSVD","SupFTSVD","FTSVD","SupFTSVD"),caption="Square root of squared distance between true and estimated singular functions, $\\sqrt{\\int\\{\\widehat{\\xi}(t)-\\xi(t)\\}^2dt}$, for FTSVD and SupFTSVD under a rank-2 model.",escape = FALSE,booktabs = TRUE,linesep = "",digits = 3) %>%
+    kableExtra::kable_classic_2() %>%
+  kableExtra::add_header_above(header = c("","","","$SNR_1$"=2,"$SNR_2$"=2,"$SNR_3$"=2),escape=FALSE)
+```
+
+```{r}
+Res3 %>%
+  filter(Var=="d") %>%
+  dplyr::select(Tau,Comp,n,FTSVD_1,SupFTSVD_1,FTSVD_2,SupFTSVD_2,FTSVD_3,SupFTSVD_3) %>%
+  group_by(Tau,n) %>%
+  arrange(Tau,Comp) %>%
+  ungroup() %>%
+  group_by(Tau,Comp) %>%
+  mutate(n=replace(n,duplicated(n),""))%>%
+  ungroup() %>%
+  group_by(Tau,Comp) %>%
+  mutate(Comp=replace(Comp,duplicated(Comp),"")) %>%
+  ungroup() %>%
+  group_by(Tau) %>%
+  mutate(Tau=replace(Tau,duplicated(Tau),"")) %>%
+  ungroup() %>%
+  kableExtra::kbl(col.names = c("$\\sigma^2$","k","n","FTSVD","SupFTSVD","FTSVD","SupFTSVD","FTSVD","SupFTSVD"),caption="Square root of mean-squared prediction error of $\\widehat{\\zeta}_{ik}$ obtained by FTSVD and SupFTSVD using a rank-2 model.",escape = FALSE,booktabs = TRUE,linesep = "",digits = 3) %>%
+    kableExtra::kable_classic_2() %>%
+  kableExtra::add_header_above(header = c("","","","$SNR_1$"=2,"$SNR_2$"=2,"$SNR_3$"=2),escape=FALSE)
+```
+
+```{r}
+Res3 %>%
+  filter(Var=="e") %>%
+  dplyr::select(Tau,Comp,n,FTSVD_1,SupFTSVD_1,FTSVD_2,SupFTSVD_2,FTSVD_3,SupFTSVD_3) %>%
+  group_by(Tau,n) %>%
+  arrange(Tau,Comp) %>%
+  ungroup() %>%
+  group_by(Tau,Comp) %>%
+  mutate(n=replace(n,duplicated(n),""))%>%
+  ungroup() %>%
+  group_by(Tau,Comp) %>%
+  mutate(Comp=replace(Comp,duplicated(Comp),"")) %>%
+  ungroup() %>%
+  group_by(Tau) %>%
+  mutate(Tau=replace(Tau,duplicated(Tau),"")) %>%
+  ungroup() %>%
+  kableExtra::kbl(col.names = c("$\\sigma^2$","k","n","FTSVD","SupFTSVD","FTSVD","SupFTSVD","FTSVD","SupFTSVD"),caption="Coefficient of determination, $R^2$, in case of modeling the subject loading $\\zeta_{ik}$ (FTSVD performs separately, however, SupFTSVD performs it simultaneously) for different $k$.",escape = FALSE,booktabs = TRUE,linesep = "",digits = 3) %>%
+    kableExtra::kable_classic_2() %>%
+  kableExtra::add_header_above(header = c("","","","$SNR_1$"=2,"$SNR_2$"=2,"$SNR_3$"=2),escape=FALSE)
+```
+
+```{r}
+Res3R2<-Res3 %>%
+  filter(Var=="f",Comp=="2") %>%
+  dplyr::select(Tau,Comp,n,FTSVD_1,SupFTSVD_1,FTSVD_2,SupFTSVD_2,FTSVD_3,SupFTSVD_3) %>%
+  group_by(Tau,n) %>%
+  arrange(Tau,Comp) %>%
+  ungroup() %>%
+  group_by(Tau,Comp) %>%
+  mutate(n=replace(n,duplicated(n),""))%>%
+  ungroup() %>%
+  group_by(Tau,Comp) %>%
+  mutate(Comp=replace(Comp,duplicated(Comp),"")) %>%
+  ungroup() %>%
+  group_by(Tau) %>%
+  mutate(Tau=replace(Tau,duplicated(Tau),"")) %>%
+  ungroup() %>%
+  mutate(r=2) %>%
+  dplyr::select(-Comp)
+```
+
+
+```{r}
+Res3 %>%
+  filter(Var=="f",Comp=="2") %>%
+  dplyr::select(Tau,Comp,n,FTSVD_1,SupFTSVD_1,FTSVD_2,SupFTSVD_2,FTSVD_3,SupFTSVD_3) %>%
+  group_by(Tau,n) %>%
+  arrange(Tau,Comp) %>%
+  ungroup() %>%
+  group_by(Tau,Comp) %>%
+  mutate(n=replace(n,duplicated(n),""))%>%
+  ungroup() %>%
+  group_by(Tau,Comp) %>%
+  mutate(Comp=replace(Comp,duplicated(Comp),"")) %>%
+  ungroup() %>%
+  group_by(Tau) %>%
+  mutate(Tau=replace(Tau,duplicated(Tau),"")) %>%
+  ungroup() %>%
+  dplyr::select(-Comp) %>%
+  kableExtra::kbl(col.names = c("$\\sigma^2$","n","FTSVD","SupFTSVD","FTSVD","SupFTSVD","FTSVD","SupFTSVD"),caption="Coefficient of determination, $R^2$, from a general linear regression using fitted components as regressors for a rank-2 model.",escape = FALSE,booktabs = TRUE,linesep = "",digits = 3,label="r2tensor2",format="latex") %>%
+    kableExtra::kable_classic_2() %>%
+  kableExtra::add_header_above(header = c("","","$SNR_1$"=2,"$SNR_2$"=2,"$SNR_3$"=2),escape=FALSE)
+```
+
+
+
+```{r}
+rbind(Res2R2,Res3R2) %>%
+  dplyr::select(r,Tau,n,FTSVD_1,SupFTSVD_1,FTSVD_2,SupFTSVD_2,FTSVD_3,SupFTSVD_3) %>%
+  mutate(r=replace(r,duplicated(r),"")) %>%
+  kableExtra::kbl(col.names = c("r","$\\sigma^2$","n","FTSVD","SupFTSVD","FTSVD","SupFTSVD","FTSVD","SupFTSVD"),caption="Coefficient of determination, $R^2$, from a general linear regression using fitted components as regressors in case of rank-1 and rank-2 models.",escape = FALSE,booktabs = TRUE,linesep = "",digits = 3,label="r2tensor2",format="latex") %>%
+    kableExtra::kable_classic_2() %>%
+  kableExtra::add_header_above(header = c("","","","$SNR_1$"=2,"$SNR_2$"=2,"$SNR_3$"=2),escape=FALSE) %>%
+  kableExtra::row_spec(8, extra_latex_after ="\\cline{2-8}")
+```
+
+
