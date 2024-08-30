@@ -1,0 +1,26 @@
+---
+title: "SupFTSVD: a dimension reduction approach"
+format: gfm
+execute: 
+  warning: false
+  message: false
+bibliography: "inst/REFERENCES.bib"
+---
+
+# Introduction
+Alam (2024+) proposed SupFTSVD as a supervised low-rank approximation of high-dimensional multivariate
+functional data via tensor decomposition. This repository highlights results of the simulation study. 
+
+```{r}
+library(tidyverse)
+library(dplyr)
+library(gridExtra)
+library(ggplot2)
+library(factoextra)
+library(glmnet)
+library(rsvd)
+library(ggpubr)
+library(matrixcalc)
+source(paste(getwd(),'/SimulationStudy_RCodes/FTSVD.R',sep = ""))
+```
+
