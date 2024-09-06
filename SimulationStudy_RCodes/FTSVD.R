@@ -19,7 +19,7 @@ library(pROC)
 #' @return The estimations of the principle components in suject/feature/time;
 #'       Var.prop: Explained variances.
 ftsvd <- function(datlist, interval = NULL, r = 3, resolution = 251, CVPhi=FALSE, K=5, cvT=5, smooth=1e-8,
-                  maxiter=20, epsilon=1e-4){
+                  maxiter=20, epsilon=1e-4,KInd=NULL){
   n = length(datlist)
   p = nrow(datlist[[1]])-1
   
@@ -112,7 +112,7 @@ ftsvd <- function(datlist, interval = NULL, r = 3, resolution = 251, CVPhi=FALSE
       }
       
       if(CVPhi & t<=cvT){
-        cvfit<-cv_freg_rkhs(Ly, a.hat, ind_vec, Kmat, Kmat_output, smooth=smooth,kfold = K)
+        cvfit<-cv_freg_rkhs(Ly, a.hat, ind_vec, Kmat, Kmat_output, smooth=smooth,kfold = K,KInd=KInd)
         Smv<-cvfit[[1]]
         phi.hat = cvfit[[2]]
       } else{
@@ -120,7 +120,7 @@ ftsvd <- function(datlist, interval = NULL, r = 3, resolution = 251, CVPhi=FALSE
       }
       
       #phi.hat = freg_rkhs(Ly, a.hat, ind_vec, Kmat, Kmat_output, smooth=smooth)
-      phi.hat = phi.hat / sqrt(sum(phi.hat^2))
+      phi.hat = (phi.hat / sqrt(sum(phi.hat^2)))*sqrt(resolution)
       
       # update a:
       a.tilde <- rep(0,n)
@@ -209,7 +209,7 @@ ftsvd <- function(datlist, interval = NULL, r = 3, resolution = 251, CVPhi=FALSE
 #' @return The estimations of the principle components in suject/feature/time;
 #'       Var.prop: Explained variances.
 supFTSVD <- function(datlist, response, interval = NULL, r = 3,resolution=100, CVPhi=FALSE, K=5, cvT=5, smooth=1e-8,
-                     maxiter=20, epsilon=1e-4){
+                     maxiter=20, epsilon=1e-4,KInd=NULL){
   n = length(datlist)
   p = nrow(datlist[[1]])-1
   
@@ -288,12 +288,12 @@ supFTSVD <- function(datlist, response, interval = NULL, r = 3,resolution=100, C
     })
     
     if(CVPhi){
-      phiH = cv_freg_rkhs(Ly, Ahat[,k], ind_vec, Kmat, Kmat_output, smooth=smooth, kfold = K)[[2]]
+      phiH = cv_freg_rkhs(Ly, Ahat[,k], ind_vec, Kmat, Kmat_output, smooth=smooth, kfold = K,KInd=KInd)[[2]]
     } else{
       phiH = freg_rkhs(Ly, Ahat[,k], ind_vec, Kmat, Kmat_output, smooth=smooth)
     }
     #phiH = freg_rkhs(Ly, a.hat, ind_vec, Kmat, Kmat_output, smooth=smooth)
-    phiH / sqrt(sum(phiH^2))
+    (phiH / sqrt(sum(phiH^2)))*sqrt(resolution)
   })
   
   t_arg<-seq(interval[1],interval[2],length.out = resolution)
@@ -509,7 +509,7 @@ supFTSVD <- function(datlist, response, interval = NULL, r = 3,resolution=100, C
       })
       
       if(CVPhi & t<=cvT){
-        cvfit<-cv_freg_rkhs(Lty,scD, ind_vec, Kmat, Kmat_output, smooth=smooth,kfold = K)
+        cvfit<-cv_freg_rkhs(Lty,scD, ind_vec, Kmat, Kmat_output, smooth=smooth,kfold = K,KInd=KInd)
         Smv<-cvfit[[1]]
         phiH = cvfit[[2]]
         eta_val<-c(eta_val,Smv)
@@ -517,7 +517,7 @@ supFTSVD <- function(datlist, response, interval = NULL, r = 3,resolution=100, C
         phiH = freg_rkhs(Lty,scD, ind_vec, Kmat, Kmat_output, smooth=ifelse(CVPhi,Smv,smooth))
         eta_val<-c(eta_val,ifelse(CVPhi,Smv,smooth))
       }
-      phi.new = phiH / sqrt(sum(phiH^2))
+      phi.new = (phiH / sqrt(sum(phiH^2)))*sqrt(resolution)
       dif<-c(dif,sum((phi.hat[,k] - phi.new)^2))
       phi.hat[,k] <- phi.new
       
@@ -765,7 +765,7 @@ predict.ftsvd<-function(obj,new_dat,newT,TimeG){
   # matrix for estimating the subject loading
   Hmat<-lapply(1:ns, function(i){
     as.matrix(sapply(1:r,function(k){
-      as.numeric(outer(obj$B.hat[,k],newSF[[i]][,k]))
+      as.numeric(outer(obj$B.hat[,k],newSF[[i]][,k])*obj$Lambda[k])
     }))
   })
   
@@ -776,19 +776,20 @@ predict.ftsvd<-function(obj,new_dat,newT,TimeG){
   
   ## Subject loading
   if(r==1){
-    Ahat<-as.matrix((sapply(1:ns, function(i){
+    Ahat<-as.matrix(sapply(1:ns, function(i){
       as.numeric((solve(t(Hmat[[i]])%*%Hmat[[i]]))%*%(t(Hmat[[i]])%*%Yvec[[i]]))
-    })))
+    }))
   } else{
     Ahat<-t(sapply(1:ns, function(i){
       as.numeric((solve(t(Hmat[[i]])%*%Hmat[[i]]))%*%(t(Hmat[[i]])%*%Yvec[[i]]))
     }))
   }
   
+  
   # Predicted data
   lapply(1:ns,function(i){
     Reduce(`+`,lapply(1:r, function(k){
-      outer(obj$B.hat[,k],obj$Phi.hat[,k])*Ahat[i,k]
+      outer(obj$B.hat[,k],obj$Phi.hat[,k])*Ahat[i,k]*obj$Lambda[k]
     }))
   })
 }
@@ -1656,21 +1657,22 @@ freg_rkhs <- function(Ly, a.hat, ind_vec, Kmat, Kmat_output, smooth=1e-8){
   return(phi.est)
 }
 
-cv_freg_rkhs<-function(Ly, a.hat, ind_vec, Kmat, Kmat_output, smooth,kfold=5){
+cv_freg_rkhs<-function(Ly, a.hat, ind_vec, Kmat, Kmat_output, smooth,kfold=5,KInd=NULL){
   A <- Kmat
   for (i in 1:length(Ly)){
     A[ind_vec==i,] <- A[ind_vec==i,]*a.hat[i]^2
   }
   cvec <- unlist(Ly)
-  
-  int<-length(cvec)%%kfold
-  if(int==0){
-    Kfold<-rep(1:kfold,each=length(cvec)/kfold)
-  } else{
-    Kfold<-c(rep(1:kfold,each=length(cvec)%/%kfold),1:(length(cvec)%%kfold))
+  if(is.null(KInd)){
+    int<-length(cvec)%%kfold
+    if(int==0){
+      Kfold<-rep(1:kfold,each=length(cvec)/kfold)
+    } else{
+      Kfold<-c(rep(1:kfold,each=length(cvec)%/%kfold),1:(length(cvec)%%kfold))
+    }
+    
+    KInd<-sample(Kfold,length(cvec),replace = FALSE)
   }
-  
-  KInd<-sample(Kfold,length(cvec),replace = FALSE)
   
   KFres<-sapply(1:length(smooth),function(j){
     sapply(1:kfold,function(i){

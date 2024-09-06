@@ -1,6 +1,10 @@
 # SupFTSVD: a dimension reduction approach
 
 
+<script src="README_files/libs/kePrint-0.0.1/kePrint.js"></script>
+<link href="README_files/libs/lightable-0.0.1/lightable.css" rel="stylesheet" />
+
+
 # Introduction
 
 Alam (2024+) proposed SupFTSVD as a supervised low-rank approximation of
@@ -23,6 +27,7 @@ source(paste(getwd(),'/SimulationStudy_RCodes/FTSVD.R',sep = ""))
 
 ``` r
 dirP<-paste(getwd(),"/SimulationStudy_Results/",sep="")
+dirP<-"/Users/ma521/Academic/PHD_RESEARCH/SupFTSVD_Paper/SimulationStudy_Results/SupFTSVD/"
 fname<-list.files(dirP)
 mbar<-c(3,5,8)
 ```
@@ -30,8 +35,8 @@ mbar<-c(3,5,8)
 ``` r
 Res2g3<-read.csv(paste(dirP,fname[5],sep = ""))
 Res3g3<-read.csv(paste(dirP,fname[6],sep = ""))
-Res2g3us<-read.csv(paste(dirP,fname[11],sep = ""))
-Res3g3us<-read.csv(paste(dirP,fname[12],sep = ""))
+Res2g3us<-read.csv(paste(dirP,fname[9],sep = ""))
+Res3g3us<-read.csv(paste(dirP,fname[10],sep = ""))
 ```
 
 ``` r
@@ -191,3 +196,301 @@ Res2_dat %>%
 ```
 
 ![](README_files/figure-commonmark/unnamed-chunk-9-1.png)
+
+## Prediction error
+
+``` r
+dirP<-"/Users/ma521/Academic/PHD_RESEARCH/SupFTSVD_Paper/SimulationStudy_Results/SupFTSVD/"
+fname<-list.files(dirP)
+mbar<-c(3,5,8)
+Res2g3<-read.csv(paste(dirP,fname[7],sep = ""))
+Res3g3<-read.csv(paste(dirP,fname[8],sep = ""))
+```
+
+``` r
+se_dat<-Res3g3 %>%
+  add_case(Res2g3) %>%
+  mutate(SNR=ifelse(Sig2E1==1,"$SNR_1$",ifelse(Sig2E1==2,"$SNR_2$","$SNR_3$")),
+         Model=rep(c("rank-1","rank-2"),c(nrow(Res3g3),nrow(Res2g3)))) %>%
+  dplyr::select(Model,Tau,n,SNR,TftsvdTR,TsubTR) %>%
+  set_names("Model","Tau","n","SNR","FTSVD","SupFTSVD") %>%
+  pivot_longer(c("FTSVD","SupFTSVD"),names_to = "Method",values_to = "FuncV") %>%
+  group_by(Model,Tau,n,SNR,Method) %>%
+  summarise_all(c("sd","length")) %>%
+  mutate(SEval=sd/sqrt(length)) %>%
+  ungroup() %>%
+  pivot_wider(id_cols = c("SNR","n","Model","Tau"),
+              names_from = c("Method"),
+              values_from = c("SEval"))
+```
+
+``` r
+Res3g3 %>%
+  add_case(Res2g3) %>%
+  mutate(SNR=ifelse(Sig2E1==1,"$SNR_1$",ifelse(Sig2E1==2,"$SNR_2$","$SNR_3$")),
+         Model=rep(c("rank-2","rank-1"),c(nrow(Res3g3),nrow(Res2g3)))) %>%
+  dplyr::select(Model,Tau,n,SNR,TftsvdTR,TsubTR) %>%
+  set_names("Model","Tau","n","SNR","FTSVD","SupFTSVD") %>%
+  pivot_longer(c("FTSVD","SupFTSVD"),names_to = "Method",values_to = "FuncV") %>%
+  group_by(Model,Tau,n,SNR,Method) %>%
+  summarise_all(c("mean")) %>%
+  ungroup() %>%
+  mutate(PeV=formatC(round(FuncV,2),digits=2,format="f")) %>%
+  pivot_wider(id_cols = c("SNR","n"),
+              names_from = c("Method","Model","Tau"),
+              values_from = c("PeV")) %>%
+  arrange(SNR,n) %>%
+  mutate(SNR=c("$SNR_1$",rep("",3),"$SNR_2$",rep("",3),"$SNR_3$",rep("",3))) %>%
+  kableExtra::kbl(col.names = c("SNR","n",rep(c("FTSVD","SupFTSVD"),4)),caption="Square root of the mean squared prediction error of $\\widehat{Y}_i(t)$ based on test data for FTSVD and SupFTSVD.",escape = FALSE,booktabs = TRUE,linesep = "",align = "c",label="pe_err",format="html") %>%
+    kableExtra::kable_classic_2() %>%
+  kableExtra::add_header_above(header = c("","","$\\\\sigma^2=1$"=2,"$\\\\sigma^2=4$"=2,"$\\\\sigma^2=1$"=2,"$\\\\sigma^2=4$"=2),escape=TRUE) %>%
+  kableExtra::add_header_above(header = c("","","rank-1"=4,"rank-2"=4),escape=FALSE) %>%
+  kableExtra::add_footnote(paste("Maximum standard errors are ",formatC(max(se_dat$FTSVD),digits=3,format="f"), " and ",formatC(max(se_dat$SupFTSVD),digits=3,format="f"), " for FTSVD and SupFTSVD, respectively.",sep=""),notation = "none") 
+```
+
+<table class="lightable-classic-2" data-quarto-postprocess="true"
+style="font-family: &quot;Arial Narrow&quot;, &quot;Source Sans Pro&quot;, sans-serif; margin-left: auto; margin-right: auto;">
+<caption>Square root of the mean squared prediction error of
+$\widehat{Y}_i(t)$ based on test data for FTSVD and SupFTSVD.</caption>
+<colgroup>
+<col style="width: 10%" />
+<col style="width: 10%" />
+<col style="width: 10%" />
+<col style="width: 10%" />
+<col style="width: 10%" />
+<col style="width: 10%" />
+<col style="width: 10%" />
+<col style="width: 10%" />
+<col style="width: 10%" />
+<col style="width: 10%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th data-quarto-table-cell-role="th"
+style="text-align: center; empty-cells: hide;"></th>
+<th data-quarto-table-cell-role="th"
+style="text-align: center; empty-cells: hide;"></th>
+<th colspan="4" data-quarto-table-cell-role="th"
+style="text-align: center; padding-bottom: 0; padding-left: 3px; padding-right: 3px;"><div
+style="border-bottom: 1px solid #111111; margin-bottom: -1px; ">
+rank-1
+</div></th>
+<th colspan="4" data-quarto-table-cell-role="th"
+style="text-align: center; padding-bottom: 0; padding-left: 3px; padding-right: 3px;"><div
+style="border-bottom: 1px solid #111111; margin-bottom: -1px; ">
+rank-2
+</div></th>
+</tr>
+<tr class="odd">
+<th data-quarto-table-cell-role="th"
+style="text-align: center; empty-cells: hide;"></th>
+<th data-quarto-table-cell-role="th"
+style="text-align: center; empty-cells: hide;"></th>
+<th colspan="2" data-quarto-table-cell-role="th"
+style="text-align: center; padding-bottom: 0; padding-left: 3px; padding-right: 3px;"><div
+style="border-bottom: 1px solid #111111; margin-bottom: -1px; ">
+$\\sigma^2=1$
+</div></th>
+<th colspan="2" data-quarto-table-cell-role="th"
+style="text-align: center; padding-bottom: 0; padding-left: 3px; padding-right: 3px;"><div
+style="border-bottom: 1px solid #111111; margin-bottom: -1px; ">
+$\\sigma^2=4$
+</div></th>
+<th colspan="2" data-quarto-table-cell-role="th"
+style="text-align: center; padding-bottom: 0; padding-left: 3px; padding-right: 3px;"><div
+style="border-bottom: 1px solid #111111; margin-bottom: -1px; ">
+$\\sigma^2=1$
+</div></th>
+<th colspan="2" data-quarto-table-cell-role="th"
+style="text-align: center; padding-bottom: 0; padding-left: 3px; padding-right: 3px;"><div
+style="border-bottom: 1px solid #111111; margin-bottom: -1px; ">
+$\\sigma^2=4$
+</div></th>
+</tr>
+<tr class="header">
+<th style="text-align: center;"
+data-quarto-table-cell-role="th">SNR</th>
+<th style="text-align: center;" data-quarto-table-cell-role="th">n</th>
+<th style="text-align: center;"
+data-quarto-table-cell-role="th">FTSVD</th>
+<th style="text-align: center;"
+data-quarto-table-cell-role="th">SupFTSVD</th>
+<th style="text-align: center;"
+data-quarto-table-cell-role="th">FTSVD</th>
+<th style="text-align: center;"
+data-quarto-table-cell-role="th">SupFTSVD</th>
+<th style="text-align: center;"
+data-quarto-table-cell-role="th">FTSVD</th>
+<th style="text-align: center;"
+data-quarto-table-cell-role="th">SupFTSVD</th>
+<th style="text-align: center;"
+data-quarto-table-cell-role="th">FTSVD</th>
+<th style="text-align: center;"
+data-quarto-table-cell-role="th">SupFTSVD</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: center;">$SNR_1$</td>
+<td style="text-align: center;">30</td>
+<td style="text-align: center;">4.94</td>
+<td style="text-align: center;">0.26</td>
+<td style="text-align: center;">4.95</td>
+<td style="text-align: center;">0.35</td>
+<td style="text-align: center;">12.92</td>
+<td style="text-align: center;">1.25</td>
+<td style="text-align: center;">12.82</td>
+<td style="text-align: center;">1.37</td>
+</tr>
+<tr class="even">
+<td style="text-align: center;"></td>
+<td style="text-align: center;">50</td>
+<td style="text-align: center;">4.92</td>
+<td style="text-align: center;">0.22</td>
+<td style="text-align: center;">4.93</td>
+<td style="text-align: center;">0.27</td>
+<td style="text-align: center;">12.89</td>
+<td style="text-align: center;">0.59</td>
+<td style="text-align: center;">12.97</td>
+<td style="text-align: center;">0.61</td>
+</tr>
+<tr class="odd">
+<td style="text-align: center;"></td>
+<td style="text-align: center;">100</td>
+<td style="text-align: center;">4.94</td>
+<td style="text-align: center;">0.13</td>
+<td style="text-align: center;">4.94</td>
+<td style="text-align: center;">0.17</td>
+<td style="text-align: center;">13.18</td>
+<td style="text-align: center;">0.39</td>
+<td style="text-align: center;">13.20</td>
+<td style="text-align: center;">0.37</td>
+</tr>
+<tr class="even">
+<td style="text-align: center;"></td>
+<td style="text-align: center;">200</td>
+<td style="text-align: center;">4.91</td>
+<td style="text-align: center;">0.10</td>
+<td style="text-align: center;">4.92</td>
+<td style="text-align: center;">0.13</td>
+<td style="text-align: center;">13.39</td>
+<td style="text-align: center;">0.22</td>
+<td style="text-align: center;">13.41</td>
+<td style="text-align: center;">0.25</td>
+</tr>
+<tr class="odd">
+<td style="text-align: center;">$SNR_2$</td>
+<td style="text-align: center;">30</td>
+<td style="text-align: center;">5.28</td>
+<td style="text-align: center;">0.26</td>
+<td style="text-align: center;">5.28</td>
+<td style="text-align: center;">0.36</td>
+<td style="text-align: center;">13.20</td>
+<td style="text-align: center;">1.92</td>
+<td style="text-align: center;">13.22</td>
+<td style="text-align: center;">1.92</td>
+</tr>
+<tr class="even">
+<td style="text-align: center;"></td>
+<td style="text-align: center;">50</td>
+<td style="text-align: center;">5.28</td>
+<td style="text-align: center;">0.22</td>
+<td style="text-align: center;">5.28</td>
+<td style="text-align: center;">0.27</td>
+<td style="text-align: center;">13.06</td>
+<td style="text-align: center;">0.60</td>
+<td style="text-align: center;">13.10</td>
+<td style="text-align: center;">0.64</td>
+</tr>
+<tr class="odd">
+<td style="text-align: center;"></td>
+<td style="text-align: center;">100</td>
+<td style="text-align: center;">5.29</td>
+<td style="text-align: center;">0.14</td>
+<td style="text-align: center;">5.29</td>
+<td style="text-align: center;">0.18</td>
+<td style="text-align: center;">13.35</td>
+<td style="text-align: center;">0.47</td>
+<td style="text-align: center;">13.35</td>
+<td style="text-align: center;">0.49</td>
+</tr>
+<tr class="even">
+<td style="text-align: center;"></td>
+<td style="text-align: center;">200</td>
+<td style="text-align: center;">5.27</td>
+<td style="text-align: center;">0.10</td>
+<td style="text-align: center;">5.26</td>
+<td style="text-align: center;">0.13</td>
+<td style="text-align: center;">13.15</td>
+<td style="text-align: center;">0.22</td>
+<td style="text-align: center;">13.18</td>
+<td style="text-align: center;">0.26</td>
+</tr>
+<tr class="odd">
+<td style="text-align: center;">$SNR_3$</td>
+<td style="text-align: center;">30</td>
+<td style="text-align: center;">6.20</td>
+<td style="text-align: center;">0.31</td>
+<td style="text-align: center;">6.19</td>
+<td style="text-align: center;">0.40</td>
+<td style="text-align: center;">14.28</td>
+<td style="text-align: center;">3.05</td>
+<td style="text-align: center;">14.28</td>
+<td style="text-align: center;">2.99</td>
+</tr>
+<tr class="even">
+<td style="text-align: center;"></td>
+<td style="text-align: center;">50</td>
+<td style="text-align: center;">6.22</td>
+<td style="text-align: center;">0.24</td>
+<td style="text-align: center;">6.24</td>
+<td style="text-align: center;">0.30</td>
+<td style="text-align: center;">13.92</td>
+<td style="text-align: center;">0.73</td>
+<td style="text-align: center;">13.93</td>
+<td style="text-align: center;">0.81</td>
+</tr>
+<tr class="odd">
+<td style="text-align: center;"></td>
+<td style="text-align: center;">100</td>
+<td style="text-align: center;">6.21</td>
+<td style="text-align: center;">0.14</td>
+<td style="text-align: center;">6.28</td>
+<td style="text-align: center;">0.18</td>
+<td style="text-align: center;">13.94</td>
+<td style="text-align: center;">0.59</td>
+<td style="text-align: center;">13.92</td>
+<td style="text-align: center;">0.61</td>
+</tr>
+<tr class="even">
+<td style="text-align: center;"></td>
+<td style="text-align: center;">200</td>
+<td style="text-align: center;">6.17</td>
+<td style="text-align: center;">0.09</td>
+<td style="text-align: center;">6.17</td>
+<td style="text-align: center;">0.12</td>
+<td style="text-align: center;">13.66</td>
+<td style="text-align: center;">0.21</td>
+<td style="text-align: center;">13.66</td>
+<td style="text-align: center;">0.25</td>
+</tr>
+</tbody><tfoot>
+<tr class="odd">
+<td style="text-align: center; padding: 0; border: 0;"><sup></sup>
+Maximum standard errors are 0.244 and 0.961 for FTSVD and SupFTSVD,
+respectively.</td>
+<td style="text-align: center;"></td>
+<td style="text-align: center;"></td>
+<td style="text-align: center;"></td>
+<td style="text-align: center;"></td>
+<td style="text-align: center;"></td>
+<td style="text-align: center;"></td>
+<td style="text-align: center;"></td>
+<td style="text-align: center;"></td>
+<td style="text-align: center;"></td>
+</tr>
+</tfoot>
+&#10;</table>
+
+Square root of the mean squared prediction error of
+\$\widehat{Y}\_i(t)\$ based on test data for FTSVD and SupFTSVD.
