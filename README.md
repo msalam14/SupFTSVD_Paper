@@ -40,8 +40,11 @@ Res3g3us<-read.csv(paste(dirP,fname[10],sep = ""))
 ```
 
 ``` r
+#ifelse(Sig2E==1,"paste(SNR[1])",ifelse(Sig2E==2,"paste(SNR[2])","paste(SNR[3])"))
 Res2_dat<-Res2g3 %>%
-  mutate(SNR=ifelse(Sig2E==1,"paste(SNR[1])",ifelse(Sig2E==2,"paste(SNR[2])","paste(SNR[3])")),
+  mutate(SNR=factor(ifelse(Sig2E==1,"paste(SNR[1])",ifelse(Sig2E==2,"paste(SNR[2])","paste(SNR[3])")),labels=c(expression("("*list(tau[1]==1,tau[2]==1.5)*")"),
+                             expression("("*list(tau[1]==2,tau[2]==2.25)*")"),
+                             expression("("*list(tau[1]==3,tau[2]==4)*")"))),
          xiFTSVD1=sqrt(xiFTSVD1),
          xiSupFTSVD1=sqrt(xiSupFTSVD1)) %>%
   dplyr::select(Tau,n,comp,Grid,SNR,Tau,FTSVD1MP,bFTSVD1,xiFTSVD1,SupFTSVD1CM,bSupFTSVD1,xiSupFTSVD1,FTSVD1,SupFTSVD1,Cov2R,SupCov2R,AR2_FTSVD1,AR2_SupFTSVD1) %>%
@@ -56,7 +59,9 @@ Res2_dat<-Res2g3 %>%
 
 ``` r
 Res2_dat_us<-Res2g3us %>%
-  mutate(SNR=ifelse(Sig2E==1,"paste(SNR[1])",ifelse(Sig2E==2,"paste(SNR[2])","paste(SNR[3])")),
+  mutate(SNR=factor(ifelse(Sig2E==1,"paste(SNR[1])",ifelse(Sig2E==2,"paste(SNR[2])","paste(SNR[3])")),labels=c(expression("("*list(tau[1]==1,tau[2]==1.5)*")"),
+                             expression("("*list(tau[1]==2,tau[2]==2.25)*")"),
+                             expression("("*list(tau[1]==3,tau[2]==4)*")"))),
          xiFTSVD1=sqrt(xiFTSVD1),
          xiSupFTSVD1=sqrt(xiSupFTSVD1)) %>%
   dplyr::select(Tau,n,comp,Grid,SNR,Tau,FTSVD1MP,bFTSVD1,xiFTSVD1,SupFTSVD1CM,bSupFTSVD1,xiSupFTSVD1,FTSVD1,SupFTSVD1,Cov2R,SupCov2R,AR2_FTSVD1,AR2_SupFTSVD1) %>%
@@ -79,10 +84,13 @@ Res3_dat<-Res3g3 %>%
   pivot_longer(cols = ends_with("FTSVD"),names_to = c("Var",".value"),
                names_sep = "_") %>%
   pivot_longer(c("FTSVD","SupFTSVD"),names_to = "Method",values_to = "FuncV") %>%
-  mutate(SNR=recode(SNR,
+  mutate(SNR=factor(recode(SNR,
                     "1"="paste(SNR[1])",
                     "2"="paste(SNR[2])",
                     "3"="paste(SNR[3])"),
+                    labels=c(expression("("*list(tau[1]==1,tau[2]==1.5)*")"),
+                             expression("("*list(tau[1]==2,tau[2]==2.25)*")"),
+                             expression("("*list(tau[1]==3,tau[2]==4)*")"))),
          SamT=factor(ifelse(Tau==1,"paste(sigma^2==1)","paste(sigma^2==4)"),levels=c("paste(sigma^2==1)","paste(sigma^2==4)")),
          Model="2")
 ```
@@ -97,10 +105,13 @@ Res3_dat_us<-Res3g3us %>%
   pivot_longer(cols = ends_with("FTSVD"),names_to = c("Var",".value"),
                names_sep = "_") %>%
   pivot_longer(c("FTSVD","SupFTSVD"),names_to = "Method",values_to = "FuncV") %>%
-  mutate(SNR=recode(SNR,
+  mutate(SNR=factor(recode(SNR,
                     "1"="paste(SNR[1])",
                     "2"="paste(SNR[2])",
                     "3"="paste(SNR[3])"),
+                    labels=c(expression("("*list(tau[1]==1,tau[2]==1.5)*")"),
+                             expression("("*list(tau[1]==2,tau[2]==2.25)*")"),
+                             expression("("*list(tau[1]==3,tau[2]==4)*")"))),
          SamT=factor(ifelse(Tau==1,"paste(sigma^2==1)","paste(sigma^2==4)"),levels=c("paste(sigma^2==1)","paste(sigma^2==4)")),
          Model="2")
 ```
@@ -128,7 +139,7 @@ Res2_dat %>%
                       "2"="rank-2")) %>%
   group_by(Model,Tau,SNR,n,Scenario,Method) %>%
   summarise_if(is.numeric,c("mean","sd","length")) %>%
-  mutate(Scenario=ifelse(Scenario=="Sup","paste(bold(beta)[k]!=0)","paste(bold(beta)[k]==0)")) %>%
+  mutate(Scenario=ifelse(Scenario=="Sup","paste(bold(gamma)[k]!=0)","paste(bold(gamma)[k]==0)")) %>%
   ggplot(aes(x=n,y=FuncV_mean,group=interaction(Method,Tau),color=Method)) +
   geom_line(aes(linetype=as.factor(Tau))) +
   geom_errorbar(aes(ymin=FuncV_mean-2*(FuncV_sd/sqrt(FuncV_length)),ymax=FuncV_mean+2*(FuncV_sd/sqrt(FuncV_length)),linetype=as.factor(Tau)),
@@ -172,7 +183,7 @@ Res2_dat %>%
   filter(Var=="e") %>%
   group_by(ModelComp,Tau,SNR,n,Scenario,Method) %>%
   summarise_if(is.numeric,c("mean","sd","length")) %>%
-  mutate(Scenario=ifelse(Scenario=="Sup","paste(bold(beta)[k]!=0)","paste(bold(beta)[k]==0)")) %>%
+  mutate(Scenario=ifelse(Scenario=="Sup","paste(bold(gamma)[k]!=0)","paste(bold(gamma)[k]==0)")) %>%
   ggplot(aes(x=n,y=FuncV_mean,group=interaction(Method,Tau),color=Method)) +
   geom_line(aes(linetype=as.factor(Tau))) +
   geom_errorbar(aes(ymin=FuncV_mean-2*(FuncV_sd/sqrt(FuncV_length)),ymax=FuncV_mean+2*(FuncV_sd/sqrt(FuncV_length)),linetype=as.factor(Tau)),
