@@ -117,7 +117,7 @@ Res3_dat_us<-Res3g3us %>%
          Model="2")
 ```
 
-## $R^2$ for data model
+## Figure 1 ($R^2$ for data mode)
 ```{r}
 Res2_dat %>%
   add_case(Res3_dat) %>%
@@ -161,11 +161,12 @@ Res2_dat %>%
                                         colour = "grey92"), complete = TRUE)+
   scale_color_manual(values=c("#F8766D","#619CFF")) +
   scale_linetype_manual(values=c(1,4),labels=c(expression(sigma^2==1),expression(sigma^2==4)))
+ggsave(filename = "r12susp_errbr_r2tensor_v1.pdf",height = 5,width=8,unit="in")
 ```
 
 
 
-## $R^2$ for subject model
+## Figure 2 ($R^2$ for subject model)
 
 ```{r}
 Res2_dat %>%
@@ -204,6 +205,7 @@ Res2_dat %>%
                                         colour = "grey92"), complete = TRUE)+
   scale_color_manual(values=c("#F8766D","#619CFF")) +
   scale_linetype_manual(values=c(1,4),labels=c(expression(sigma^2==1),expression(sigma^2==4)))
+ggsave(filename = "r12susp_errbr_r2zeta_v1.pdf",height = 6,width=12,unit="in")
 ```
 
 ## Prediction error
@@ -257,5 +259,199 @@ Res3g3 %>%
   kableExtra::add_header_above(header = c("","","$\\\\sigma^2=1$"=2,"$\\\\sigma^2=4$"=2,"$\\\\sigma^2=1$"=2,"$\\\\sigma^2=4$"=2),escape=TRUE) %>%
   kableExtra::add_header_above(header = c("","","rank-1"=4,"rank-2"=4),escape=FALSE) %>%
   kableExtra::add_footnote(paste("Maximum standard errors are ",formatC(max(se_dat$FTSVD),digits=3,format="f"), " and ",formatC(max(se_dat$SupFTSVD),digits=3,format="f"), " for FTSVD and SupFTSVD, respectively.",sep=""),notation = "none") 
+```
+
+## Figure S1: $X\beta$
+
+```{r}
+Res2_dat %>%
+  add_case(Res3_dat) %>%
+  add_case(Res2_dat_us) %>%
+  add_case(Res3_dat_us) %>%
+  mutate(Scenario=rep(c("Sup","USup"),c(nrow(Res2_dat)+nrow(Res3_dat),nrow(Res2_dat_us)+nrow(Res3_dat_us)))) %>%
+  group_by(Tau,n,Comp,Method,Model,SNR,Var,Scenario) %>%
+  mutate(Iter=row_number()) %>%
+  ungroup() %>%
+  mutate(ModelCompTau=paste("paste(sigma^2==",Tau,"~","(list(k==",Comp,",r==",Model,")))",sep=""))%>%
+  mutate(ModelComp=factor(ifelse(Model=="1" & Comp=="1","paste(list(k==1,r==1))",
+                         ifelse(Model=="2" & Comp=="1","paste(list(k==1,r==2))","paste(list(k==2,r==2))")),labels = c(expression("("*list(k==1,r==1)*")"), expression("("*list(k==1,r==2)*")"),expression("("*list(k==2,r==2)*")")))) %>%
+  mutate(TauSNR=paste("paste(sigma^2==",Tau,"~","(",SNR,"))",sep="")) %>%
+  filter(Var=="a") %>%
+  group_by(ModelComp,TauSNR,n,Scenario,Method) %>%
+  summarise_if(is.numeric,c("mean","sd","length")) %>%
+  ggplot(aes(x=n,y=FuncV_mean,group=interaction(Method,Scenario),color=Method)) +
+  geom_line(aes(linetype=Scenario)) +
+  geom_errorbar(aes(ymin=FuncV_mean-2*(FuncV_sd/sqrt(FuncV_length)),ymax=FuncV_mean+2*(FuncV_sd/sqrt(FuncV_length)),linetype=Scenario),
+                position=position_dodge(5)) +
+  facet_grid(rows = vars(ModelComp),cols = vars(TauSNR),scales = "free_y",labeller = label_parsed)+
+  xlab(expression("Number of subjects (n)")) +
+  ylab(expression(sqrt("MSE("*bold(x)[i]^{T}*hat(bold(beta))[k]*")"))) +
+  theme(legend.title = element_blank(),
+        legend.position = "top",legend.background = element_rect(fill = "transparent",linetype = 0),legend.direction = "horizontal",legend.box = "horizontal",
+        panel.background = element_rect(fill = "white",colour = NA), 
+        panel.border = element_rect(fill = NA, colour = "grey20"), 
+        panel.grid = element_line(colour = "grey92"), 
+        panel.grid.minor = element_line(linewidth = rel(0.5)), 
+        strip.background = element_rect(fill = "grey92", 
+                                        colour = "grey92"), complete = TRUE)+
+  scale_color_manual(values=c("#F8766D","#619CFF")) +
+  scale_linetype_manual(values=c(1,2),labels=c(expression(bold(gamma)[k]!=0),expression(bold(gamma)[k]==0)))
+ggsave(filename = "r12susp_errbr_xb.pdf",height = 6,width=12,unit="in")
+```
+
+## Figure S2 ($\boldsymbol{\xi}_k$)
+
+```{r}
+Res2_dat %>%
+  add_case(Res3_dat) %>%
+  add_case(Res2_dat_us) %>%
+  add_case(Res3_dat_us) %>%
+  mutate(Scenario=rep(c("Sup","USup"),c(nrow(Res2_dat)+nrow(Res3_dat),nrow(Res2_dat_us)+nrow(Res3_dat_us)))) %>%
+  group_by(Tau,n,Comp,Method,Model,SNR,Var,Scenario) %>%
+  mutate(Iter=row_number()) %>%
+  ungroup() %>%
+  mutate(ModelCompTau=paste("paste(sigma^2==",Tau,"~","(list(k==",Comp,",r==",Model,")))",sep=""))%>%
+  mutate(ModelComp=factor(ifelse(Model=="1" & Comp=="1","paste(list(k==1,r==1))",
+                         ifelse(Model=="2" & Comp=="1","paste(list(k==1,r==2))","paste(list(k==2,r==2))")),labels = c(expression("("*list(k==1,r==1)*")"), expression("("*list(k==1,r==2)*")"),expression("("*list(k==2,r==2)*")")))) %>%
+  mutate(TauSNR=paste("paste(sigma^2==",Tau,"~","(",SNR,"))",sep="")) %>%
+  filter(Var=="b") %>%
+  group_by(ModelComp,TauSNR,n,Scenario,Method) %>%
+  summarise_if(is.numeric,c("mean","sd","length")) %>%
+  ggplot(aes(x=n,y=FuncV_mean,group=interaction(Method,Scenario),color=Method)) +
+  geom_line(aes(linetype=Scenario)) +
+  geom_errorbar(aes(ymin=FuncV_mean-2*(FuncV_sd/sqrt(FuncV_length)),ymax=FuncV_mean+2*(FuncV_sd/sqrt(FuncV_length)),linetype=Scenario),
+                position=position_dodge(5)) +
+  facet_grid(rows = vars(ModelComp),cols = vars(TauSNR),scales = "free_y",labeller = label_parsed)+
+  xlab(expression("Number of subjects (n)")) +
+  ylab(expression("||"*hat(bold(xi))[k]-bold(xi)[k]*"||"[2])) +
+  theme(legend.title = element_blank(),
+        legend.position = "top",legend.background = element_rect(fill = "transparent",linetype = 0),legend.direction = "horizontal",legend.box = "horizontal",
+        panel.background = element_rect(fill = "white",colour = NA), 
+        panel.border = element_rect(fill = NA, colour = "grey20"), 
+        panel.grid = element_line(colour = "grey92"), 
+        panel.grid.minor = element_line(linewidth = rel(0.5)), 
+        strip.background = element_rect(fill = "grey92", 
+                                        colour = "grey92"), complete = TRUE)+
+  scale_color_manual(values=c("#F8766D","#619CFF")) +
+  scale_linetype_manual(values=c(1,2),labels=c(expression(bold(gamma)[k]!=0),expression(bold(gamma)[k]==0)))
+ggsave(filename = "r12susp_errbr_xi.pdf",height = 6,width=12,unit="in")
+```
+
+## Figure S3 $\psi_k(\cdot)$
+```{r}
+Res2_dat %>%
+  add_case(Res3_dat) %>%
+  add_case(Res2_dat_us) %>%
+  add_case(Res3_dat_us) %>%
+  mutate(Scenario=rep(c("Sup","USup"),c(nrow(Res2_dat)+nrow(Res3_dat),nrow(Res2_dat_us)+nrow(Res3_dat_us)))) %>%
+  group_by(Tau,n,Comp,Method,Model,SNR,Var,Scenario) %>%
+  mutate(Iter=row_number()) %>%
+  ungroup() %>%
+  mutate(ModelCompTau=paste("paste(sigma^2==",Tau,"~","(list(k==",Comp,",r==",Model,")))",sep=""))%>%
+  mutate(ModelComp=factor(ifelse(Model=="1" & Comp=="1","paste(list(k==1,r==1))",
+                         ifelse(Model=="2" & Comp=="1","paste(list(k==1,r==2))","paste(list(k==2,r==2))")),labels = c(expression("("*list(k==1,r==1)*")"), expression("("*list(k==1,r==2)*")"),expression("("*list(k==2,r==2)*")")))) %>%
+  mutate(TauSNR=paste("paste(sigma^2==",Tau,"~","(",SNR,"))",sep="")) %>%
+  filter(Var=="c") %>%
+  group_by(ModelComp,TauSNR,n,Scenario,Method) %>%
+  summarise_if(is.numeric,c("mean","sd","length")) %>%
+  ggplot(aes(x=n,y=FuncV_mean,group=interaction(Method,Scenario),color=Method)) +
+  geom_line(aes(linetype=Scenario)) +
+  geom_errorbar(aes(ymin=FuncV_mean-2*(FuncV_sd/sqrt(FuncV_length)),ymax=FuncV_mean+2*(FuncV_sd/sqrt(FuncV_length)),linetype=Scenario),
+                position=position_dodge(5)) +
+  facet_grid(rows = vars(ModelComp),cols = vars(TauSNR),scales = "free_y",labeller = label_parsed)+
+  xlab(expression("Number of subjects (n)")) +
+  ylab(expression(sqrt(integral("{"*hat(psi[k])(t)-psi[k](t)*"}"^2*dt,t,"")))) +
+  theme(legend.title = element_blank(),
+        legend.position = "top",legend.background = element_rect(fill = "transparent",linetype = 0),legend.direction = "horizontal",legend.box = "horizontal",
+        panel.background = element_rect(fill = "white",colour = NA), 
+        panel.border = element_rect(fill = NA, colour = "grey20"), 
+        panel.grid = element_line(colour = "grey92"), 
+        panel.grid.minor = element_line(linewidth = rel(0.5)), 
+        strip.background = element_rect(fill = "grey92", 
+                                        colour = "grey92"), complete = TRUE)+
+  scale_color_manual(values=c("#F8766D","#619CFF")) +
+  scale_linetype_manual(values=c(1,2),labels=c(expression(bold(gamma)[k]!=0),expression(bold(gamma)[k]==0)))
+ggsave(filename = "r12susp_errbr_psi.pdf",height = 6,width=12,unit="in")
+```
+
+## Figure 3 ($R^2$ for data model)
+
+```{r}
+Res2_dat %>%
+  add_case(Res3_dat) %>%
+  add_case(Res2_dat_us) %>%
+  add_case(Res3_dat_us) %>%
+  mutate(Scenario=rep(c("Sup","USup"),c(nrow(Res2_dat)+nrow(Res3_dat),nrow(Res2_dat_us)+nrow(Res3_dat_us)))) %>%
+  group_by(Tau,Grid,Comp,Method,Model,SNR,Var,Scenario) %>%
+  mutate(Iter=row_number()) %>%
+  ungroup() %>%
+  mutate(ModelCompTau=paste("paste(sigma^2==",Tau,"~","(list(k==",Comp,",r==",Model,")))",sep=""))%>%
+  mutate(ModelTau=factor(paste("paste(sigma^2==",Tau,"~","(r==",Model,"))",sep=""),labels = c("paste(sigma^2==1(r==1))","paste(sigma^2==4(r==1))","paste(sigma^2==1(r==2))","paste(sigma^2==4(r==2))")))%>%
+  mutate(ModelComp=factor(ifelse(Model=="1" & Comp=="1","paste(list(k==1,r==1))",
+                         ifelse(Model=="2" & Comp=="1","paste(list(k==1,r==2))","paste(list(k==2,r==2))")),labels = c(expression("("*list(k==1,r==1)*")"), expression("("*list(k==1,r==2)*")"),expression("("*list(k==2,r==2)*")")))) %>%
+  mutate(TauSNR=paste("paste(sigma^2==",Tau,"~","(",SNR,"))",sep="")) %>%
+  filter(Var=="f") %>%
+  filter(!(Model==2 & Comp==1)) %>%
+  mutate(Model=recode(Model,
+                      "1"="rank-1",
+                      "2"="rank-2")) %>%
+  group_by(Model,TauSNR,Grid,Scenario,Method) %>%
+  summarise_if(is.numeric,c("mean","sd","length")) %>%
+  ggplot(aes(x=Grid,y=FuncV_mean,group=interaction(Method,Scenario),color=Method)) +
+  geom_line(aes(linetype=Scenario)) +
+  geom_errorbar(aes(ymin=FuncV_mean-2*(FuncV_sd/sqrt(FuncV_length)),ymax=FuncV_mean+2*(FuncV_sd/sqrt(FuncV_length)),linetype=Scenario),
+                position=position_dodge(0)) +
+  facet_grid(rows = vars(Model),cols = vars(TauSNR),scales = "free_y",labeller = label_parsed)+
+  xlab(expression("Number of observations ("*m[i]*")")) +
+  ylab(expression("Coefficient of determination, "*R^2*", for "*Y[ij]^b)) +
+  theme(legend.title = element_blank(),
+        legend.position = "top",legend.background = element_rect(fill = "transparent",linetype=0),legend.direction = "horizontal",legend.box = "horizontal",
+        panel.background = element_rect(fill = "white",colour = NA), 
+        panel.border = element_rect(fill = NA, colour = "grey20"), 
+        panel.grid = element_line(colour = "grey92"), 
+        panel.grid.minor = element_line(linewidth = rel(0.5)), 
+        strip.background = element_rect(fill = "grey92", 
+                                        colour = "grey92"), complete = TRUE)+
+  scale_color_manual(values=c("#F8766D","#619CFF")) +
+  scale_linetype_manual(values=c(1,2),labels=c(expression(bold(gamma)[k]!=0),expression(bold(gamma)[k]==0)))
+ggsave(filename = "r12susp_errbr_r2tensor_gd.pdf",height = 5,width=8,unit="in")
+```
+
+
+## Figure 4 ($R^2$ for subject model)
+```{r}
+Res2_dat %>%
+  add_case(Res3_dat) %>%
+  add_case(Res2_dat_us) %>%
+  add_case(Res3_dat_us) %>%
+  mutate(Scenario=rep(c("Sup","USup"),c(nrow(Res2_dat)+nrow(Res3_dat),nrow(Res2_dat_us)+nrow(Res3_dat_us)))) %>%
+  group_by(Tau,Grid,Comp,Method,Model,SNR,Var,Scenario) %>%
+  mutate(Iter=row_number()) %>%
+  ungroup() %>%
+  mutate(ModelCompTau=paste("paste(sigma^2==",Tau,"~","(list(k==",Comp,",r==",Model,")))",sep=""))%>%
+  mutate(ModelComp=factor(ifelse(Model=="1" & Comp=="1","paste(list(k==1,r==1))",
+                         ifelse(Model=="2" & Comp=="1","paste(list(k==1,r==2))","paste(list(k==2,r==2))")),labels = c(expression("("*list(k==1,r==1)*")"), expression("("*list(k==1,r==2)*")"),expression("("*list(k==2,r==2)*")")))) %>%
+  mutate(TauSNR=paste("paste(sigma^2==",Tau,"~","(",SNR,"))",sep="")) %>%
+  filter(Var=="e") %>%
+  group_by(ModelComp,TauSNR,Grid,Scenario,Method) %>%
+  summarise_if(is.numeric,c("mean","sd","length")) %>%
+  ggplot(aes(x=Grid,y=FuncV_mean,group=interaction(Method,Scenario),color=Method)) +
+  geom_line(aes(linetype=Scenario)) +
+  geom_errorbar(aes(ymin=FuncV_mean-2*(FuncV_sd/sqrt(FuncV_length)),ymax=FuncV_mean+2*(FuncV_sd/sqrt(FuncV_length)),linetype=Scenario),
+                position=position_dodge(0.10)) +
+  facet_grid(rows = vars(ModelComp),cols = vars(TauSNR),scales = "free_y",labeller = label_parsed)+
+  xlab(expression("Number of observations ("*m[i]*")")) +
+  ylab(expression("Coefficient of determination, "*R^2*", for "*zeta[ik])) +
+  theme(legend.title = element_blank(),
+        legend.position = "top",legend.background = element_rect(fill = "transparent",linetype = 0),legend.direction = "horizontal",legend.box = "horizontal",
+        panel.background = element_rect(fill = "white",colour = NA), 
+        panel.border = element_rect(fill = NA, colour = "grey20"), 
+        panel.grid = element_line(colour = "grey92"), 
+        panel.grid.minor = element_line(linewidth = rel(0.5)), 
+        strip.background = element_rect(fill = "grey92", 
+                                        colour = "grey92"), complete = TRUE)+
+  scale_color_manual(values=c("#F8766D","#619CFF")) +
+  scale_linetype_manual(values=c(1,2),labels=c(expression(bold(gamma)[k]!=0),expression(bold(gamma)[k]==0)))
+ggsave(filename = "r12susp_errbr_r2zeta_gd.pdf",height = 6,width=12,unit="in")
 ```
 
