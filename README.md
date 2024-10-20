@@ -118,7 +118,7 @@ Res3_dat_us<-Res3g3us %>%
          Model="2")
 ```
 
-## Figure 1 ($R^2$ for data mode)
+## Figure 1 ($R^2$ for data model)
 
 ``` r
 Res2_dat %>%
@@ -171,7 +171,7 @@ Res2_dat %>%
 ggsave(filename = "r12susp_errbr_r2tensor_v1.pdf",height = 5,width=12,unit="in")
 ```
 
-## Figure 2 ($R^2$ for subject model)
+## Figure 2 ($R^2$ for subject loading model)
 
 ``` r
 Res2_dat %>%
@@ -218,7 +218,7 @@ Res2_dat %>%
 ggsave(filename = "r12susp_errbr_r2zeta_v1.pdf",height = 6,width=12,unit="in")
 ```
 
-## Prediction error
+## Prediction error over sample size, $n$
 
 ``` r
 dirP<-"/Users/ma521/Academic/PHD_RESEARCH/SupFTSVD_Paper/SimulationStudy_Results/SupFTSVD/"
@@ -265,283 +265,6 @@ se_dat<-Res3g3 %>%
 ``` r
 Res3g3 %>%
   add_case(Res2g3) %>%
-  mutate(SNR=ifelse(Sig2E1==1,"$SNR_1$",ifelse(Sig2E1==2,"$SNR_2$","$SNR_3$")),
-         Model=rep(c("rank-2","rank-1"),c(nrow(Res3g3),nrow(Res2g3)))) %>%
-  dplyr::select(Model,Tau,n,SNR,TftsvdTR,TsubTR) %>%
-  set_names("Model","Tau","n","SNR","FTSVD","SupFTSVD") %>%
-  pivot_longer(c("FTSVD","SupFTSVD"),names_to = "Method",values_to = "FuncV") %>%
-  group_by(Model,Tau,n,SNR,Method) %>%
-  summarise_all(c("mean")) %>%
-  ungroup() %>%
-  mutate(PeV=formatC(round(FuncV,2),digits=2,format="f")) %>%
-  pivot_wider(id_cols = c("SNR","n"),
-              names_from = c("Method","Model","Tau"),
-              values_from = c("PeV")) %>%
-  arrange(SNR,n) %>%
-  mutate(SNR=replace(SNR,duplicated(SNR),"")) %>%
-  kableExtra::kbl(col.names = c("SNR","n",rep(c("FTSVD","SupFTSVD"),4)),caption="Square root of the mean squared prediction error (MSPE) $\\eqref{eq:MSPE}$ for the out-of-sample low-rank tensor approximation accuracy across numbers of subjects $n$.",escape = FALSE,booktabs = TRUE,linesep = "",align = "c",label="pe_err_n",format="html") %>%
-    kableExtra::kable_classic_2() %>%
-  kableExtra::add_header_above(header = c("","","$\\\\sigma^2=1$"=2,"$\\\\sigma^2=4$"=2,"$\\\\sigma^2=1$"=2,"$\\\\sigma^2=4$"=2),escape=FALSE) %>%
-  kableExtra::add_header_above(header = c("","","rank-1"=4,"rank-2"=4),escape=FALSE) %>%
-  kableExtra::kable_styling(latex_options = "scale_down") %>%
-  kableExtra::footnote(general=paste("Maximum standard errors are ",formatC(max(se_dat$FTSVD),digits=3,format="f"), " and ",formatC(max(se_dat$SupFTSVD),digits=3,format="f"), " for FTSVD and SupFTSVD, respectively. Each SNR scenario represents a combination of $(\\\\tau_1,\\\\tau_2)$; specifically, $SNR_1=(\\\\tau_1=1,\\\\tau_2=1.5)$, $SNR_2=(\\\\tau_1=2,\\\\tau_2=2.25)$, and $SNR_3=(\\\\tau_1=3,\\\\tau_2=4)$.",sep=""),general_title = "",escape=FALSE,threeparttable = TRUE,footnote_as_chunk = T) 
-```
-
-<table class="lightable-classic-2 table" data-quarto-postprocess="true"
-style="font-family: &quot;Arial Narrow&quot;, &quot;Source Sans Pro&quot;, sans-serif; margin-left: auto; margin-right: auto; margin-left: auto; margin-right: auto;border-bottom: 0;">
-<caption>Square root of the mean squared prediction error (MSPE)
-$\eqref{eq:MSPE}$ for the out-of-sample low-rank tensor approximation
-accuracy across numbers of subjects $n$.</caption>
-<colgroup>
-<col style="width: 10%" />
-<col style="width: 10%" />
-<col style="width: 10%" />
-<col style="width: 10%" />
-<col style="width: 10%" />
-<col style="width: 10%" />
-<col style="width: 10%" />
-<col style="width: 10%" />
-<col style="width: 10%" />
-<col style="width: 10%" />
-</colgroup>
-<thead>
-<tr class="header">
-<th data-quarto-table-cell-role="th"
-style="text-align: center; empty-cells: hide;"></th>
-<th data-quarto-table-cell-role="th"
-style="text-align: center; empty-cells: hide;"></th>
-<th colspan="4" data-quarto-table-cell-role="th"
-style="text-align: center; padding-bottom: 0; padding-left: 3px; padding-right: 3px;"><div
-style="border-bottom: 1px solid #111111; margin-bottom: -1px; ">
-rank-1
-</div></th>
-<th colspan="4" data-quarto-table-cell-role="th"
-style="text-align: center; padding-bottom: 0; padding-left: 3px; padding-right: 3px;"><div
-style="border-bottom: 1px solid #111111; margin-bottom: -1px; ">
-rank-2
-</div></th>
-</tr>
-<tr class="odd">
-<th data-quarto-table-cell-role="th"
-style="text-align: center; empty-cells: hide;"></th>
-<th data-quarto-table-cell-role="th"
-style="text-align: center; empty-cells: hide;"></th>
-<th colspan="2" data-quarto-table-cell-role="th"
-style="text-align: center; padding-bottom: 0; padding-left: 3px; padding-right: 3px;"><div
-style="border-bottom: 1px solid #111111; margin-bottom: -1px; ">
-$\\sigma^2=1$
-</div></th>
-<th colspan="2" data-quarto-table-cell-role="th"
-style="text-align: center; padding-bottom: 0; padding-left: 3px; padding-right: 3px;"><div
-style="border-bottom: 1px solid #111111; margin-bottom: -1px; ">
-$\\sigma^2=4$
-</div></th>
-<th colspan="2" data-quarto-table-cell-role="th"
-style="text-align: center; padding-bottom: 0; padding-left: 3px; padding-right: 3px;"><div
-style="border-bottom: 1px solid #111111; margin-bottom: -1px; ">
-$\\sigma^2=1$
-</div></th>
-<th colspan="2" data-quarto-table-cell-role="th"
-style="text-align: center; padding-bottom: 0; padding-left: 3px; padding-right: 3px;"><div
-style="border-bottom: 1px solid #111111; margin-bottom: -1px; ">
-$\\sigma^2=4$
-</div></th>
-</tr>
-<tr class="header">
-<th style="text-align: center;"
-data-quarto-table-cell-role="th">SNR</th>
-<th style="text-align: center;" data-quarto-table-cell-role="th">n</th>
-<th style="text-align: center;"
-data-quarto-table-cell-role="th">FTSVD</th>
-<th style="text-align: center;"
-data-quarto-table-cell-role="th">SupFTSVD</th>
-<th style="text-align: center;"
-data-quarto-table-cell-role="th">FTSVD</th>
-<th style="text-align: center;"
-data-quarto-table-cell-role="th">SupFTSVD</th>
-<th style="text-align: center;"
-data-quarto-table-cell-role="th">FTSVD</th>
-<th style="text-align: center;"
-data-quarto-table-cell-role="th">SupFTSVD</th>
-<th style="text-align: center;"
-data-quarto-table-cell-role="th">FTSVD</th>
-<th style="text-align: center;"
-data-quarto-table-cell-role="th">SupFTSVD</th>
-</tr>
-</thead>
-<tbody>
-<tr class="odd">
-<td style="text-align: center;">$SNR_1$</td>
-<td style="text-align: center;">30</td>
-<td style="text-align: center;">4.94</td>
-<td style="text-align: center;">0.26</td>
-<td style="text-align: center;">4.95</td>
-<td style="text-align: center;">0.35</td>
-<td style="text-align: center;">12.92</td>
-<td style="text-align: center;">1.25</td>
-<td style="text-align: center;">12.82</td>
-<td style="text-align: center;">1.37</td>
-</tr>
-<tr class="even">
-<td style="text-align: center;"></td>
-<td style="text-align: center;">50</td>
-<td style="text-align: center;">4.92</td>
-<td style="text-align: center;">0.22</td>
-<td style="text-align: center;">4.93</td>
-<td style="text-align: center;">0.27</td>
-<td style="text-align: center;">12.89</td>
-<td style="text-align: center;">0.59</td>
-<td style="text-align: center;">12.97</td>
-<td style="text-align: center;">0.61</td>
-</tr>
-<tr class="odd">
-<td style="text-align: center;"></td>
-<td style="text-align: center;">100</td>
-<td style="text-align: center;">4.94</td>
-<td style="text-align: center;">0.13</td>
-<td style="text-align: center;">4.94</td>
-<td style="text-align: center;">0.17</td>
-<td style="text-align: center;">13.18</td>
-<td style="text-align: center;">0.39</td>
-<td style="text-align: center;">13.20</td>
-<td style="text-align: center;">0.37</td>
-</tr>
-<tr class="even">
-<td style="text-align: center;"></td>
-<td style="text-align: center;">200</td>
-<td style="text-align: center;">4.91</td>
-<td style="text-align: center;">0.10</td>
-<td style="text-align: center;">4.92</td>
-<td style="text-align: center;">0.13</td>
-<td style="text-align: center;">13.39</td>
-<td style="text-align: center;">0.22</td>
-<td style="text-align: center;">13.41</td>
-<td style="text-align: center;">0.25</td>
-</tr>
-<tr class="odd">
-<td style="text-align: center;">$SNR_2$</td>
-<td style="text-align: center;">30</td>
-<td style="text-align: center;">5.28</td>
-<td style="text-align: center;">0.26</td>
-<td style="text-align: center;">5.28</td>
-<td style="text-align: center;">0.36</td>
-<td style="text-align: center;">13.20</td>
-<td style="text-align: center;">1.92</td>
-<td style="text-align: center;">13.22</td>
-<td style="text-align: center;">1.92</td>
-</tr>
-<tr class="even">
-<td style="text-align: center;"></td>
-<td style="text-align: center;">50</td>
-<td style="text-align: center;">5.28</td>
-<td style="text-align: center;">0.22</td>
-<td style="text-align: center;">5.28</td>
-<td style="text-align: center;">0.27</td>
-<td style="text-align: center;">13.06</td>
-<td style="text-align: center;">0.60</td>
-<td style="text-align: center;">13.10</td>
-<td style="text-align: center;">0.64</td>
-</tr>
-<tr class="odd">
-<td style="text-align: center;"></td>
-<td style="text-align: center;">100</td>
-<td style="text-align: center;">5.29</td>
-<td style="text-align: center;">0.14</td>
-<td style="text-align: center;">5.29</td>
-<td style="text-align: center;">0.18</td>
-<td style="text-align: center;">13.35</td>
-<td style="text-align: center;">0.47</td>
-<td style="text-align: center;">13.35</td>
-<td style="text-align: center;">0.49</td>
-</tr>
-<tr class="even">
-<td style="text-align: center;"></td>
-<td style="text-align: center;">200</td>
-<td style="text-align: center;">5.27</td>
-<td style="text-align: center;">0.10</td>
-<td style="text-align: center;">5.26</td>
-<td style="text-align: center;">0.13</td>
-<td style="text-align: center;">13.15</td>
-<td style="text-align: center;">0.22</td>
-<td style="text-align: center;">13.18</td>
-<td style="text-align: center;">0.26</td>
-</tr>
-<tr class="odd">
-<td style="text-align: center;">$SNR_3$</td>
-<td style="text-align: center;">30</td>
-<td style="text-align: center;">6.20</td>
-<td style="text-align: center;">0.31</td>
-<td style="text-align: center;">6.19</td>
-<td style="text-align: center;">0.40</td>
-<td style="text-align: center;">14.28</td>
-<td style="text-align: center;">3.05</td>
-<td style="text-align: center;">14.28</td>
-<td style="text-align: center;">2.99</td>
-</tr>
-<tr class="even">
-<td style="text-align: center;"></td>
-<td style="text-align: center;">50</td>
-<td style="text-align: center;">6.22</td>
-<td style="text-align: center;">0.24</td>
-<td style="text-align: center;">6.24</td>
-<td style="text-align: center;">0.30</td>
-<td style="text-align: center;">13.92</td>
-<td style="text-align: center;">0.73</td>
-<td style="text-align: center;">13.93</td>
-<td style="text-align: center;">0.81</td>
-</tr>
-<tr class="odd">
-<td style="text-align: center;"></td>
-<td style="text-align: center;">100</td>
-<td style="text-align: center;">6.21</td>
-<td style="text-align: center;">0.14</td>
-<td style="text-align: center;">6.28</td>
-<td style="text-align: center;">0.18</td>
-<td style="text-align: center;">13.94</td>
-<td style="text-align: center;">0.59</td>
-<td style="text-align: center;">13.92</td>
-<td style="text-align: center;">0.61</td>
-</tr>
-<tr class="even">
-<td style="text-align: center;"></td>
-<td style="text-align: center;">200</td>
-<td style="text-align: center;">6.17</td>
-<td style="text-align: center;">0.09</td>
-<td style="text-align: center;">6.17</td>
-<td style="text-align: center;">0.12</td>
-<td style="text-align: center;">13.66</td>
-<td style="text-align: center;">0.21</td>
-<td style="text-align: center;">13.66</td>
-<td style="text-align: center;">0.25</td>
-</tr>
-</tbody><tfoot>
-<tr class="odd">
-<td style="text-align: center; padding: 0;"><sup></sup> Maximum standard
-errors are 0.244 and 0.961 for FTSVD and SupFTSVD, respectively. Each
-SNR scenario represents a combination of $(\\tau_1,\\tau_2)$;
-specifically, $SNR_1=(\\tau_1=1,\\tau_2=1.5)$,
-$SNR_2=(\\tau_1=2,\\tau_2=2.25)$, and
-$SNR_3=(\\tau_1=3,\\tau_2=4)$.</td>
-<td style="text-align: center;"></td>
-<td style="text-align: center;"></td>
-<td style="text-align: center;"></td>
-<td style="text-align: center;"></td>
-<td style="text-align: center;"></td>
-<td style="text-align: center;"></td>
-<td style="text-align: center;"></td>
-<td style="text-align: center;"></td>
-<td style="text-align: center;"></td>
-</tr>
-</tfoot>
-&#10;</table>
-
-Square root of the mean squared prediction error (MSPE)
-\$\eqref{eq:MSPE}\$ for the out-of-sample low-rank tensor approximation
-accuracy across numbers of subjects \$n\$.
-
-``` r
-Res3g3 %>%
-  add_case(Res2g3) %>%
   mutate(SNR=ifelse(Sig2E1==1,"paste(SNR[1])",ifelse(Sig2E1==2,"paste(SNR[2])","paste(SNR[3])")),
          Model=rep(c("rank-2","rank-1"),c(nrow(Res3g3),nrow(Res2g3)))) %>%
   dplyr::select(Model,Tau,n,SNR,TftsvdTR,TsubTR) %>%
@@ -574,52 +297,9 @@ Res3g3 %>%
 
 ![](README_files/figure-commonmark/unnamed-chunk-14-1.png)
 
-## Figure S1: $X\beta$
+<!-- ## Figure S1: $X\beta$ -->
 
-``` r
-Res2_dat %>%
-  add_case(Res3_dat) %>%
-  add_case(Res2_dat_us) %>%
-  add_case(Res3_dat_us) %>%
-  mutate(Scenario=rep(c("Sup","USup"),c(nrow(Res2_dat)+nrow(Res3_dat),nrow(Res2_dat_us)+nrow(Res3_dat_us)))) %>%
-  group_by(Tau,n,Comp,Method,Model,SNR,Var,Scenario) %>%
-  mutate(Iter=row_number()) %>%
-  ungroup() %>%
-  mutate(ModelCompTau=paste("paste(sigma^2==",Tau,"~","(list(k==",Comp,",r==",Model,")))",sep=""))%>%
-  mutate(ModelComp=factor(ifelse(Model=="1" & Comp=="1","paste(list(k==1,r==1))",
-                         ifelse(Model=="2" & Comp=="1","paste(list(k==1,r==2))","paste(list(k==2,r==2))")),labels = c(expression("("*list(k==1,r==1)*")"), expression("("*list(k==1,r==2)*")"),expression("("*list(k==2,r==2)*")")))) %>%
-  mutate(TauSNR=paste("paste(sigma^2==",Tau,"~",SNR,")",sep="")) %>%
-  filter(Var=="a") %>%
-  group_by(ModelComp,Tau,SNR,n,Scenario,Method) %>%
-  summarise_if(is.numeric,c("mean","sd","length")) %>%
-  mutate(Scenario=ifelse(Scenario=="Sup","paste(bold(gamma)[k]!=0)","paste(bold(gamma)[k]==0)")) %>%
-  ggplot(aes(x=n,y=FuncV_mean,group=interaction(Method,Tau),color=Method)) +
-  geom_line(aes(linetype=as.factor(Tau))) +
-  geom_errorbar(aes(ymin=FuncV_mean-2*(FuncV_sd/sqrt(FuncV_length)),ymax=FuncV_mean+2*(FuncV_sd/sqrt(FuncV_length)),linetype=as.factor(Tau)),
-                position=position_dodge(5)) +
-    facet_nested(ModelComp~Scenario+SNR,scales = "free_y",labeller = label_parsed,nest_line = element_line(linetype = 2)) + 
-  #facet_grid(rows = vars(ModelComp),cols = vars(TauSNR),scales = "free_y",labeller = label_parsed)+
-  xlab(expression("Number of subjects (n)")) +
-  ylab(expression(sqrt("MSE("*bold(x)[i]^{T}*hat(bold(beta))[k]*")"))) +
-  theme(legend.title = element_blank(),
-        legend.position = "top",legend.background = element_rect(fill = "transparent",linetype = 0),legend.direction = "horizontal",legend.box = "horizontal",
-        panel.background = element_rect(fill = "white",colour = NA), 
-        panel.border = element_rect(fill = NA, colour = "grey20"), 
-        panel.grid = element_line(colour = "grey92"), 
-        panel.grid.minor = element_line(linewidth = rel(0.5)), 
-        strip.background = element_rect(fill = "grey92", 
-                                        colour = "grey92"), complete = TRUE)+
-  scale_color_manual(values=c("#F8766D","#619CFF")) +
-  scale_linetype_manual(values=c(1,4),labels=c(expression(sigma^2==1),expression(sigma^2==4)))
-```
-
-![](README_files/figure-commonmark/unnamed-chunk-15-1.png)
-
-``` r
-ggsave(filename = "r12susp_errbr_xb.pdf",height = 6,width=12,unit="in")
-```
-
-## Figure S2 ($\boldsymbol{\xi}_k$)
+## Figure $S1$ ($\boldsymbol{\xi}_k$)
 
 ``` r
 Res2_dat %>%
@@ -664,7 +344,7 @@ Res2_dat %>%
 ggsave(filename = "r12susp_errbr_xi.pdf",height = 6,width=12,unit="in")
 ```
 
-## Figure S3 $\psi_k(\cdot)$
+## Figure $S3$ $\psi_k(\cdot)$
 
 ``` r
 Res2_dat %>%
@@ -842,7 +522,7 @@ Res2_dat %>%
 ggsave(filename = "r12susp_errbr_r2tensor_gd.pdf",height = 5,width=12,unit="in")
 ```
 
-## Figure 4 ($R^2$ for subject model)
+## Figure 4 ($R^2$ for subject loading model)
 
 ``` r
 Res2_dat %>%
@@ -887,52 +567,9 @@ Res2_dat %>%
 ggsave(filename = "r12susp_errbr_r2zeta_gd.pdf",height = 6,width=12,unit="in")
 ```
 
-## Figure S_new: $X\beta$ over $m_i$
+<!-- ## Figure S_new: $X\beta$ over $m_i$ -->
 
-``` r
-Res2_dat %>%
-  add_case(Res3_dat) %>%
-  add_case(Res2_dat_us) %>%
-  add_case(Res3_dat_us) %>%
-  mutate(Scenario=rep(c("Sup","USup"),c(nrow(Res2_dat)+nrow(Res3_dat),nrow(Res2_dat_us)+nrow(Res3_dat_us)))) %>%
-  group_by(Tau,Grid,Comp,Method,Model,SNR,Var,Scenario) %>%
-  mutate(Iter=row_number()) %>%
-  ungroup() %>%
-  mutate(ModelCompTau=paste("paste(sigma^2==",Tau,"~","(list(k==",Comp,",r==",Model,")))",sep=""))%>%
-  mutate(ModelComp=factor(ifelse(Model=="1" & Comp=="1","paste(list(k==1,r==1))",
-                         ifelse(Model=="2" & Comp=="1","paste(list(k==1,r==2))","paste(list(k==2,r==2))")),labels = c(expression("("*list(k==1,r==1)*")"), expression("("*list(k==1,r==2)*")"),expression("("*list(k==2,r==2)*")")))) %>%
-  mutate(TauSNR=paste("paste(sigma^2==",Tau,"~",SNR,")",sep="")) %>%
-  filter(Var=="a") %>%
-  group_by(ModelComp,Tau,SNR,Grid,Scenario,Method) %>%
-  summarise_if(is.numeric,c("mean","sd","length")) %>%
-  mutate(Scenario=ifelse(Scenario=="Sup","paste(bold(gamma)[k]!=0)","paste(bold(gamma)[k]==0)")) %>%
-  ggplot(aes(x=Grid,y=FuncV_mean,group=interaction(Method,Tau),color=Method)) +
-  geom_line(aes(linetype=as.factor(Tau))) +
-  geom_errorbar(aes(ymin=FuncV_mean-2*(FuncV_sd/sqrt(FuncV_length)),ymax=FuncV_mean+2*(FuncV_sd/sqrt(FuncV_length)),linetype=as.factor(Tau)),
-                position=position_dodge(0.25)) +
-    facet_nested(ModelComp~Scenario+SNR,scales = "free_y",labeller = label_parsed,nest_line = element_line(linetype = 2)) + 
-  #facet_grid(rows = vars(ModelComp),cols = vars(TauSNR),scales = "free_y",labeller = label_parsed)+
-  xlab(expression("Number of time points ("*m[i]*")")) +
-  ylab(expression(sqrt("MSE("*bold(x)[i]^{T}*hat(bold(beta))[k]*")"))) +
-  theme(legend.title = element_blank(),
-        legend.position = "top",legend.background = element_rect(fill = "transparent",linetype = 0),legend.direction = "horizontal",legend.box = "horizontal",
-        panel.background = element_rect(fill = "white",colour = NA), 
-        panel.border = element_rect(fill = NA, colour = "grey20"), 
-        panel.grid = element_line(colour = "grey92"), 
-        panel.grid.minor = element_line(linewidth = rel(0.5)), 
-        strip.background = element_rect(fill = "grey92", 
-                                        colour = "grey92"), complete = TRUE)+
-  scale_color_manual(values=c("#F8766D","#619CFF")) +
-  scale_linetype_manual(values=c(1,4),labels=c(expression(sigma^2==1),expression(sigma^2==4)))
-```
-
-![](README_files/figure-commonmark/unnamed-chunk-25-1.png)
-
-``` r
-ggsave(filename = "r12susp_errbr_xb_gd.pdf",height = 6,width=12,unit="in")
-```
-
-## Figure S_new1 ($\boldsymbol{\xi}_k$)
+## Figure $S2$ ($\boldsymbol{\xi}_k$)
 
 ``` r
 Res2_dat %>%
@@ -977,7 +614,7 @@ Res2_dat %>%
 ggsave(filename = "r12susp_errbr_xi_gd.pdf",height = 6,width=12,unit="in")
 ```
 
-## Figure S_new2 $\psi_k(\cdot)$
+## Figure $S4$ $\psi_k(\cdot)$
 
 ``` r
 Res2_dat %>%
@@ -1022,7 +659,7 @@ Res2_dat %>%
 ggsave(filename = "r12susp_errbr_psi_gd.pdf",height = 6,width=12,unit="in")
 ```
 
-## Prediction error
+## Prediction error over number of time points, $m_i$
 
 ``` r
 dirP<-"/Users/ma521/Academic/PHD_RESEARCH/SupFTSVD_Paper/SimulationStudy_Results/SupFTSVD/"
@@ -1344,7 +981,7 @@ Square root of the mean squared prediction error (MSPE)
 \$\eqref{eq:MSPE}\$ for the out-of-sample low-rank tensor approximation
 accuracy across different numbers of time points \$m_i\$.
 
-# Combined prediction error
+# Figure 5
 
 ``` r
 pred_n %>%
